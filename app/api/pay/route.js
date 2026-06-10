@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
@@ -51,7 +53,7 @@ export async function POST(request) {
     return NextResponse.json({ success: true, message: "Pagamento completato", remaining_balance: newBalance });
 
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "Errore sconosciuto";
-    return NextResponse.json({ success: false, error: msg }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Errore sconosciuto";
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
