@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 
 export default function CassaLido() {
   const [tab, setTab] = useState('reg');
@@ -33,7 +34,7 @@ export default function CassaLido() {
       const res = await fetch('/api/register-tag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: regUid.trim(), name: regName.trim(), initial_balance: regBalance })
+        body: JSON.stringify({ uid: regUid.trim(), name: regName.trim(), initialBalance: regBalance })
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -41,9 +42,9 @@ export default function CassaLido() {
         setRegUid(''); setRegName(''); setRegBalance('0.00');
         regInputRef.current?.focus();
       } else {
-        showToast(`Errore: ${data.error}`, false);
+        showToast(`Errore: ${data.error || 'Errore sconosciuto'}`, false);
       }
-    } catch {
+    } catch (err) {
       showToast("Errore di connessione con le Serverless Vercel.", false);
     }
   };
@@ -62,18 +63,15 @@ export default function CassaLido() {
         setTopupUid(''); setTopupAmount('');
         topupInputRef.current?.focus();
       } else {
-        showToast(`Errore: ${data.error}`, false);
+        showToast(`Errore: ${data.error || 'Errore sconosciuto'}`, false);
       }
-    } catch {
+    } catch (err) {
       showToast("Errore di connessione con le Serverless Vercel.", false);
     }
   };
 
   return (
     <div className="bg-slate-50 font-sans min-h-screen text-slate-800 antialiased">
-      {/* Script Tailwind per Next.js */}
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tailwindcss/ui@latest/dist/tailwind-ui.min.css"/>
-      
       <nav className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 text-white p-4 shadow-lg sticky top-0 z-40">
         <div className="max-w-xl mx-auto flex justify-between items-center">
           <div className="flex items-center space-x-3">
@@ -86,8 +84,8 @@ export default function CassaLido() {
 
       <main className="max-w-xl mx-auto px-4 py-8">
         <div className="bg-slate-200/70 p-1.5 rounded-2xl flex space-x-1 mb-6 shadow-inner">
-          <button onClick={() => setTab('reg')} className={`flex-1 py-3 text-sm font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'reg' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}>➕ Nuova Scheda</button>
-          <button onClick={() => setTab('topup')} className={`flex-1 py-3 text-sm font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'topup' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-600'}`}>⚡ Ricarica</button>
+          <button type="button" onClick={() => setTab('reg')} className={`flex-1 py-3 text-sm font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'reg' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}>➕ Nuova Scheda</button>
+          <button type="button" onClick={() => setTab('topup')} className={`flex-1 py-3 text-sm font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'topup' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-600'}`}>⚡ Ricarica</button>
         </div>
 
         {tab === 'reg' ? (
@@ -99,7 +97,7 @@ export default function CassaLido() {
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">1. UID Carta (Passa sul lettore)</label>
-                <input ref={regInputRef} type="text" required value={regUid} onChange={(e) => setRegUid(e.target.value)} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none border-blue-500"/>
+                <input ref={regInputRef} type="text" required value={regUid} onChange={(e) => setRegUid(e.target.value)} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-blue-500"/>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">2. Nome Ospite / Ombrellone</label>
@@ -121,7 +119,7 @@ export default function CassaLido() {
             <form onSubmit={handleTopup} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">UID Carta (Passa sul lettore)</label>
-                <input ref={topupInputRef} type="text" required value={topupUid} onChange={(e) => setTopupUid(e.target.value)} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none border-emerald-500"/>
+                <input ref={topupInputRef} type="text" required value={topupUid} onChange={(e) => setTopupUid(e.target.value)} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-emerald-500"/>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Importo Cash da Aggiungere (€)</label>
