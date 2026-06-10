@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
@@ -8,11 +9,11 @@ const supabase = createClient(
 
 export async function POST(request) {
   try {
-    const { uid, amount } = await request.json();
-    const topupAmount = parseFloat(amount);
+    const { uid, amount, description } = await request.json();
+    const chargeAmount = parseFloat(amount);
 
-    if (!uid || isNaN(topupAmount) || topupAmount <= 0) {
-      return NextResponse.json({ success: false, error: "UID o importo non valido" }, { status: 400 });
+    if (!uid || isNaN(chargeAmount) || chargeAmount <= 0) {
+      return NextResponse.json({ success: false, error: "Dati di pagamento non validi" }, { status: 400 });
     }
 
     const { data: tag, error: tagError } = await supabase
