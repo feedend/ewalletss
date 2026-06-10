@@ -62,8 +62,9 @@ export async function POST(request) {
 
     return NextResponse.json({ success: true, new_balance: newBalance });
 
-  } catch (error) {
-    console.error("ERRORE TOPUP:", error.message);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+ } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Errore sconosciuto";
+    console.error("ERRORE TOPUP:", errorMessage);
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
