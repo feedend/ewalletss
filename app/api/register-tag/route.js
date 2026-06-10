@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
@@ -8,13 +9,13 @@ const supabase = createClient(
 
 export async function POST(request) {
   try {
-    const { uid, name, initialBalance } = await request.json();
-    const balanceNum = parseFloat(initialBalance) || 0.00;
+    const { uid, amount, description } = await request.json();
+    const chargeAmount = parseFloat(amount);
 
-    if (!uid || !name) {
-      return NextResponse.json({ success: false, error: "UID e Nome sono obbligatori" }, { status: 400 });
+    if (!uid || isNaN(chargeAmount) || chargeAmount <= 0) {
+      return NextResponse.json({ success: false, error: "Dati di pagamento non validi" }, { status: 400 });
     }
-
+    
     const { data: customer, error: custError } = await supabase
       .from('customers')
       .insert([{ name, balance: balanceNum }])
