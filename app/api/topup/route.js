@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 const supabase = createClient(
   'https://rvsgbsnkurutsburxkwk.supabase.co',
-  process.env.SUPABASE_ANON_KEY
+  process.env.SUPABASE_ANON_KEY || ''
 );
 
 export async function POST(request) {
@@ -15,7 +15,6 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: "UID o importo non valido" }, { status: 400 });
     }
 
-    // 1. Trova il cliente associato al braccialetto NFC
     const { data: tag, error: tagError } = await supabase
       .from('nfc_tags')
       .select('customer_id')
@@ -29,7 +28,6 @@ export async function POST(request) {
     
     const customerId = tag.customer_id;
 
-    // 2. Recupera il saldo attuale del cliente
     const { data: customer, error: custError } = await supabase
       .from('customers')
       .select('balance')
@@ -41,19 +39,15 @@ export async function POST(request) {
     }
 
     const currentBalance = parseFloat(customer.balance) || 0.00;
-    
-    // Calcoliamo il nuovo saldo arrotondando a due cifre decimali
     const newBalance = parseFloat((currentBalance + topupAmount).toFixed(2));
 
-    // 3. Aggiorna il saldo nel database
     const { error: updateError } = await supabase
       .from('customers')
       .update({ balance: newBalance })
       .eq('id', customerId);
 
-    if (updateError) throw new Error("Impossibile aggiornare il saldo su Supabase");
+    if (updateError) throw new Error("Impossibile aggiornare il saldo");
 
-    // 4. Registra l'operazione nello storico transazioni
     await supabase
       .from('transactions')
       .insert([
@@ -62,9 +56,8 @@ export async function POST(request) {
 
     return NextResponse.json({ success: true, new_balance: newBalance });
 
- } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Errore sconosciuto";
-    console.error("ERRORE TOPUP:", errorMessage);
-    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Errore sconosciuto";
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }
