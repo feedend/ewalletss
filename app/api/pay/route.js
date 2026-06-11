@@ -8,9 +8,12 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY || ''
 );
 
-export async function POST(request) {
+  export async function POST(request) {
   try {
-    const { uid, amount, description } = await request.json();
+    const body = await request.json();
+    console.log("👉 DATI RICEVUTI DALLA CASSA:", body); // <-- AGGIUNGI QUESTO
+    
+    const { uid, amount, description } = body;
     const chargeAmount = parseFloat(amount);
 
     if (!uid || isNaN(chargeAmount) || chargeAmount <= 0) {
