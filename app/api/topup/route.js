@@ -7,7 +7,7 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY || ''
 );
 
-export async function POST(request) { // <-- Corretto qui
+export async function POST(request) {
   try {
     const { uid, amount, description } = await request.json();
     const chargeAmount = parseFloat(amount);
