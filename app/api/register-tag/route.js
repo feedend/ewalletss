@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-// Ruota di scorta per la chiave in fase di build
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || "";
 
 const supabase = createClient(
@@ -13,16 +12,13 @@ const supabase = createClient(
 
 export async function POST(request) {
   try {
-    // Riceviamo i dati corretti inviati dal modulo "Nuova Scheda" del frontend
     const { uid, name, initialBalance } = await request.json();
     const balanceNum = parseFloat(initialBalance) || 0.00;
 
-    // 1. Controllo dei campi obbligatori
     if (!uid || !name) {
       return NextResponse.json({ success: false, error: "UID e Nome Ombrellone sono obbligatori!" }, { status: 400 });
     }
 
-    // 2. Creiamo l'anagrafica del cliente nella tabella 'customers'
     const { data: customer, error: custError } = await supabase
       .from('customers')
       .insert([{ name, balance: balanceNum }])
@@ -31,14 +27,12 @@ export async function POST(request) {
 
     if (custError) throw custError;
 
-    // 3. Colleghiamo il braccialetto NFC (UID) al cliente appena creato
     const { error: tagError } = await supabase
       .from('nfc_tags')
       .insert([{ uid, customer_id: customer.id, status: 'active' }]);
 
     if (tagError) throw tagError;
 
-    // 4. Se è stato caricato del denaro iniziale, registriamo la transazione di ricarica
     if (balanceNum > 0) {
       await supabase
         .from('transactions')
@@ -52,11 +46,15 @@ export async function POST(request) {
         ]);
     }
 
-    // 5. Risposta di successo al frontend
     return NextResponse.json({ success: true, customer });
 
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "Errore sconosciuto";
+    // 1. Stampa l'errore reale nel terminale di Codespaces per sicurezza
+    console.error("❌ ERRORE DA SUPABASE:", error);
+
+    // 2. Estrae il messaggio reale dall'oggetto di Supabase
+    const msg = error?.message || (typeof error === 'string' ? error : JSON.stringify(error));
+    
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }
