@@ -16,10 +16,16 @@ const supabase = createClient(
     const { uid, amount, description } = body;
     const chargeAmount = parseFloat(amount);
 
-    if (!uid || isNaN(chargeAmount) || chargeAmount <= 0) {
-      return NextResponse.json({ success: false, error: "Dati di pagamento non validi" }, { status: 400 });
+   // 1. Validazione dati in ingresso DETTAGLIATA
+    if (!uid) {
+      return NextResponse.json({ success: false, error: "Errore: Campo 'uid' mancante o vuoto!" }, { status: 400 });
     }
-
+    if (isNaN(chargeAmount)) {
+      return NextResponse.json({ success: false, error: "Errore: Il campo 'amount' non è un numero valido o manca!" }, { status: 400 });
+    }
+    if (chargeAmount <= 0) {
+      return NextResponse.json({ success: false, error: "Errore: L'importo ('amount') deve essere maggiore di zero!" }, { status: 400 });
+    }
     const { data: tag, error: tagError } = await supabase
       .from('nfc_tags')
       .select('customer_id, customers(balance)')
