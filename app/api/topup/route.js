@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || "";
 
+// 🔥 SCRIVIAMO IL LINK DIRETTAMENTE QUI, COSI VERCEL NON PUÒ ANDARE IN ERRORE DURANTE IL BUILD!
 const supabase = createClient(
   'https://rvsgbsnkurutsburxkwk.supabase.co',
   SUPABASE_KEY
@@ -52,7 +53,7 @@ export async function POST(request) {
 
     if (updateError) throw updateError;
 
-    // 4. Registriamo la transazione nello storico
+    // 4. Registruire la transazione nello storico
     await supabase
       .from('transactions')
       .insert([
