@@ -19,6 +19,7 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: "UID e Nome Ombrellone sono obbligatori!" }, { status: 400 });
     }
 
+    // 1. Creiamo sempre il nuovo cliente
     const { data: customer, error: custError } = await supabase
       .from('customers')
       .insert([{ name, balance: balanceNum }])
@@ -27,9 +28,10 @@ export async function POST(request) {
 
     if (custError) throw custError;
 
+    // 2. Usiamo UPSERT: se l'UID esiste già, lo strappa al vecchio cliente e lo assegna a quello nuovo!
     const { error: tagError } = await supabase
       .from('nfc_tags')
-      .insert([{ uid, customer_id: customer.id, status: 'active' }]);
+      .upsert([{ uid, customer_id: customer.id, status: 'active' }], { onConflict: 'uid' });
 
     if (tagError) throw tagError;
 
@@ -49,12 +51,8 @@ export async function POST(request) {
     return NextResponse.json({ success: true, customer });
 
   } catch (error) {
-    // 1. Stampa l'errore reale nel terminale di Codespaces per sicurezza
     console.error("❌ ERRORE DA SUPABASE:", error);
-
-    // 2. Estrae il messaggio reale dall'oggetto di Supabase
     const msg = error?.message || (typeof error === 'string' ? error : JSON.stringify(error));
-    
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }
