@@ -1,10 +1,11 @@
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'; // 🔥 Forza Next.js a saltare il controllo statico nel build
 
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || "";
 
+// 🔥 Scriviamo il link di Supabase direttamente qui per evitare crash a freddo
 const supabase = createClient(
   'https://rvsgbsnkurutsburxkwk.supabase.co',
   SUPABASE_KEY
@@ -19,7 +20,7 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: "UID e Nome Ombrellone sono obbligatori!" }, { status: 400 });
     }
 
-    // 1. Creiamo sempre il nuovo cliente
+    // 1. Creiamo il nuovo cliente nel database
     const { data: customer, error: custError } = await supabase
       .from('customers')
       .insert([{ name, balance: balanceNum }])
@@ -28,13 +29,14 @@ export async function POST(request) {
 
     if (custError) throw custError;
 
-    // 2. Usiamo UPSERT: se l'UID esiste già, lo strappa al vecchio cliente e lo assegna a quello nuovo!
+    // 2. Usiamo UPSERT: se l'UID esiste già, lo riassegna al nuovo cliente
     const { error: tagError } = await supabase
       .from('nfc_tags')
-      .upsert([{ uid, customer_id: customer.id, status: 'active' }], { onConflict: 'uid' });
+      .upsert([{ uid: uid.trim(), customer_id: customer.id, status: 'active' }], { onConflict: 'uid' });
 
     if (tagError) throw tagError;
 
+    // 3. Se c'è un credito iniziale, registriamo la transazione di ricarica
     if (balanceNum > 0) {
       await supabase
         .from('transactions')
@@ -51,7 +53,7 @@ export async function POST(request) {
     return NextResponse.json({ success: true, customer });
 
   } catch (error) {
-    console.error("❌ ERRORE DA SUPABASE:", error);
+    console.error("❌ ERRORE DA SUPABASE REGISTRAZIONE:", error);
     const msg = error?.message || (typeof error === 'string' ? error : JSON.stringify(error));
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
