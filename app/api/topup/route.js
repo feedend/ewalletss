@@ -1,13 +1,19 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
+// 🛑 FORZA NEXT.JS A IGNORARE QUESTO FILE IN FASE DI BUILD
+export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return NextResponse.json({ success: false, error: 'Configurazione database mancante' }, { status: 500 });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
     const { uid, amount } = await request.json();
     const numericAmount = parseFloat(amount);
 
@@ -15,7 +21,6 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'Dati di ricarica non validi' }, { status: 400 });
     }
 
-    // 1. Recuperiamo il customer_id legato a questo UID
     const { data: tagData, error: tagError } = await supabase
       .from('nfc_tags')
       .select('customer_id')
@@ -28,7 +33,6 @@ export async function POST(request) {
 
     const customerId = tagData.customer_id;
 
-    // 2. Preleviamo il saldo attuale del cliente per evitare disallineamenti
     const { data: customer, error: custError } = await supabase
       .from('customers')
       .select('balance')
@@ -36,13 +40,11 @@ export async function POST(request) {
       .single();
 
     if (custError || !customer) {
-      return NextResponse.json({ success: false, error: 'Cliente non trovato nel database' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Cliente non trovato' }, { status: 404 });
     }
 
-    // Calcoliamo il nuovo saldo finale
     const newBalance = customer.balance + numericAmount;
 
-    // 3. Aggiorniamo il bilancio del cliente sulla tabella 'customers'
     const { error: updateError } = await supabase
       .from('customers')
       .update({ balance: newBalance })
@@ -50,7 +52,6 @@ export async function POST(request) {
 
     if (updateError) throw updateError;
 
-    // 4. Scriviamo il movimento nella tabella 'transactions' (Storico/Log di cassa)
     const { error: txError } = await supabase
       .from('transactions')
       .insert({
@@ -62,7 +63,6 @@ export async function POST(request) {
 
     if (txError) throw txError;
 
-    // Risposta di successo al frontend per stampare la ricevuta a schermo
     return NextResponse.json({
       success: true,
       new_balance: newBalance
