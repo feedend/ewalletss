@@ -1,6 +1,6 @@
 // app/api/get-tag/route.js
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-base'; // O il tuo import di Supabase
+import { createClient } from '@supabase/supabase-js';
 
 // Sostituisci con le tue reali configurazioni di inizializzazione Supabase se le hai in un file separato
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
