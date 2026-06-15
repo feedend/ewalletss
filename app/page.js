@@ -116,7 +116,7 @@ export default function CassaLido() {
       showToast("Azione bloccata. Devi prima liberare la tessera!", false);
       return;
     }
-    // ... (Logica handleRegister identica alla precedente)
+    // ... (Logica handleRegister)
     addLog(`✅ COMPLETATO: ${regName.trim()} associato al Tag [${regUid.trim()}]`);
     setRegUid(''); setRegName(''); setRegBalance('0.00');
   };
@@ -258,7 +258,20 @@ export default function CassaLido() {
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Importo Cash da Aggiungere (€)</label>
                 <input type="number" step="0.01" value={topupAmount} onChange={(e) => setTopupAmount(e.target.value)} placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-emerald-600 text-lg text-center outline-none focus:border-emerald-500"/>
               </div>
-              <button type="submit" disabled={!scannedCard} className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold p-4 rounded-xl text-sm uppercase tracking-wider shadow-md disabled:opacity-40">💰 Conferma ed Incassa</button>
+              
+              {/* 🛡️ BOTTONE HARDENED CON INLINE STYLES CONTRO I BUG DI CACHE VERCEL */}
+              <button 
+                type="submit" 
+                disabled={!scannedCard} 
+                style={{ 
+                  backgroundColor: scannedCard ? '#10b981' : '#e2e8f0', 
+                  color: scannedCard ? '#ffffff' : '#94a3b8',
+                  cursor: scannedCard ? 'pointer' : 'not-allowed'
+                }} 
+                className="w-full font-bold p-4 rounded-xl text-sm uppercase tracking-wider shadow-md transition-all"
+              >
+                💰 Conferma ed Incassa
+              </button>
             </form>
 
             {/* 📥 BOX RICEVUTA DIFFERENZIATO: Mostra Saldo Iniziale VS Saldo Finale ad operazione completata */}
@@ -284,8 +297,11 @@ export default function CassaLido() {
           </section>
         )}
 
-        {/* LOG LIVE TERMINAL */}
-        <div className="w-full bg-slate-900 text-slate-200 p-4 rounded-2xl font-mono text-xs h-40 overflow-y-auto border border-slate-800 shadow-lg">
+        {/* 🛡️ LOG LIVE TERMINAL HARDENED CON INLINE STYLES */}
+        <div 
+          style={{ backgroundColor: '#0f172a', color: '#e2e8f0' }} 
+          className="w-full p-4 rounded-2xl font-mono text-xs h-40 overflow-y-auto border border-slate-800 shadow-lg"
+        >
           <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-1.5 mb-2">💾 Registro Operazioni Cassa (Log Live)</h3>
           {logs.length === 0 ? <div className="text-slate-500 italic">In attesa di operazioni...</div> : <div className="space-y-1">{logs.map((log, i) => <div key={i} className="py-0.5 truncate border-b border-slate-850 last:border-0">{log}</div>)}</div>}
         </div>
