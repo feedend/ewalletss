@@ -1,51 +1,48 @@
-export const dynamic = 'force-dynamic';
-
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || "";
-
-// 🔥 SCRIVIAMO IL LINK DIRETTAMENTE QUI, COSI VERCEL NON PUÒ ANDARE IN ERRORE DURANTE IL BUILD!
 const supabase = createClient(
-  'https://rvsgbsnkurutsburxkwk.supabase.co',
-  SUPABASE_KEY
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
 export async function POST(request) {
   try {
     const { uid, amount } = await request.json();
-    const amountNum = parseFloat(amount) || 0.00;
+    const numericAmount = parseFloat(amount);
 
-    if (!uid || amountNum <= 0) {
-      return NextResponse.json({ success: false, error: "UID e Importo valido sono obbligatori!" }, { status: 400 });
+    if (!uid || isNaN(numericAmount) || numericAmount <= 0) {
+      return NextResponse.json({ success: false, error: 'Dati di ricarica non validi' }, { status: 400 });
     }
 
-    // 1. Cerchiamo a quale cliente appartiene questo braccialetto/tessera
+    // 1. Recuperiamo il customer_id legato a questo UID
     const { data: tagData, error: tagError } = await supabase
       .from('nfc_tags')
       .select('customer_id')
-      .eq('uid', uid.trim())
+      .eq('uid', uid)
       .single();
 
-    if (tagError || !tagData) {
-      return NextResponse.json({ success: false, error: "Tessera non trovata o non associata ad alcun cliente!" }, { status: 404 });
+    if (tagError || !tagData || !tagData.customer_id) {
+      return NextResponse.json({ success: false, error: 'Tessera non associata ad un cliente attivo' }, { status: 404 });
     }
 
     const customerId = tagData.customer_id;
 
-    // 2. Recuperiamo il saldo attuale del cliente per aggiornarlo in sicurezza
-    const { data: customerData, error: custFetchError } = await supabase
+    // 2. Preleviamo il saldo attuale del cliente per evitare disallineamenti
+    const { data: customer, error: custError } = await supabase
       .from('customers')
       .select('balance')
       .eq('id', customerId)
       .single();
 
-    if (custFetchError) throw custFetchError;
+    if (custError || !customer) {
+      return NextResponse.json({ success: false, error: 'Cliente non trovato nel database' }, { status: 404 });
+    }
 
-    const currentBalance = parseFloat(customerData.balance) || 0.00;
-    const newBalance = currentBalance + amountNum;
+    // Calcoliamo il nuovo saldo finale
+    const newBalance = customer.balance + numericAmount;
 
-    // 3. Aggiorniamo il saldo del cliente
+    // 3. Aggiorniamo il bilancio del cliente sulla tabella 'customers'
     const { error: updateError } = await supabase
       .from('customers')
       .update({ balance: newBalance })
@@ -53,23 +50,25 @@ export async function POST(request) {
 
     if (updateError) throw updateError;
 
-    // 4. Registruire la transazione nello storico
-    await supabase
+    // 4. Scriviamo il movimento nella tabella 'transactions' (Storico/Log di cassa)
+    const { error: txError } = await supabase
       .from('transactions')
-      .insert([
-        { 
-          customer_id: customerId, 
-          type: 'topup', 
-          amount: amountNum, 
-          description: 'Ricarica effettuata in cassa' 
-        }
-      ]);
+      .insert({
+        customer_id: customerId,
+        type: 'topup',
+        amount: numericAmount,
+        description: 'Ricarica eWallet da Cassa Centrale'
+      });
 
-    return NextResponse.json({ success: true, new_balance: newBalance });
+    if (txError) throw txError;
 
-  } catch (error) {
-    console.error("❌ ERRORE TOPUP:", error);
-    const msg = error?.message || "Errore interno durante la ricarica.";
-    return NextResponse.json({ success: false, error: msg }, { status: 500 });
+    // Risposta di successo al frontend per stampare la ricevuta a schermo
+    return NextResponse.json({
+      success: true,
+      new_balance: newBalance
+    });
+
+  } catch (err) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
