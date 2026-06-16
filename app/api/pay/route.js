@@ -1,68 +1,114 @@
+import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+// 🛑 FORZA NEXT.JS A IGNORARE QUESTO FILE IN FASE DI BUILD SU VERCEL
 export const dynamic = 'force-dynamic';
 
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
-
-const supabase = createClient(
-  'https://rvsgbsnkurutsburxkwk.supabase.co',
-  process.env.SUPABASE_ANON_KEY || ''
-);
-
-  export async function POST(request) {
+export async function POST(request) {
   try {
-    const body = await request.json();
-    console.log("👉 DATI RICEVUTI DALLA CASSA:", body); // <-- AGGIUNGI QUESTO
-    
-    const { uid, amount, description } = body;
-    const chargeAmount = parseFloat(amount);
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-   // 1. Validazione dati in ingresso DETTAGLIATA
+    // 1. Controllo di sicurezza sulle chiavi d'ambiente
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return NextResponse.json({ success: false, error: 'Configurazione database mancante' }, { status: 500 });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    
+    // Riceve l'UID della tessera e il prezzo della consumazione/servizio da scalare
+    const { uid, amount, description } = await request.json();
+    const parsedAmount = parseFloat(amount);
+
+    // 2. Controlli preventivi sui dati ricevuti dal frontend
     if (!uid) {
-      return NextResponse.json({ success: false, error: "Errore: Campo 'uid' mancante o vuoto!" }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Tag UID mancante.' }, { status: 400 });
     }
-    if (isNaN(chargeAmount)) {
-      return NextResponse.json({ success: false, error: "Errore: Il campo 'amount' non è un numero valido o manca!" }, { status: 400 });
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return NextResponse.json({ success: false, error: 'Importo del pagamento non valido (deve essere maggiore di 0).' }, { status: 400 });
     }
-    if (chargeAmount <= 0) {
-      return NextResponse.json({ success: false, error: "Errore: L'importo ('amount') deve essere maggiore di zero!" }, { status: 400 });
-    }
-    const { data: tag, error: tagError } = await supabase
+
+    // 3. Recupera la tessera e i dati del cliente associato
+    const { data: tagData, error: tagError } = await supabase
       .from('nfc_tags')
-      .select('customer_id, customers(balance)')
+      .select(`
+        uid,
+        status,
+        customers (
+          id,
+          name,
+          balance,
+          is_active
+        )
+      `)
       .eq('uid', uid)
-      .eq('status', 'active')
       .maybeSingle();
 
-    if (tagError || !tag) {
-      return NextResponse.json({ success: false, error: "Braccialetto non valido o non attivo" }, { status: 404 });
+    if (tagError || !tagData || !tagData.customers) {
+      return NextResponse.json({ success: false, error: 'Tessera non registrata o inesistente a sistema.' }, { status: 404 });
     }
 
-    const customerId = tag.customer_id;
-    const currentBalance = parseFloat(tag.customers.balance) || 0.00;
+    // Gestione difensiva se la relazione 'customers' viene restituita come array
+    const customer = Array.isArray(tagData.customers) ? tagData.customers[0] : tagData.customers;
 
-    if (currentBalance < chargeAmount) {
-      return NextResponse.json({ success: false, error: "Credito insufficiente sull'eWallet!" }, { status: 400 });
+    // 4. Verifiche di validità del cliente e dello stato della tessera
+    if (!customer || customer.is_active === false) {
+      return NextResponse.json({ success: false, error: 'Questo account cliente è disattivato.' }, { status: 403 });
+    }
+    if (tagData.status !== 'active') {
+      return NextResponse.json({ success: false, error: `Tessera non utilizzabile. Stato attuale: ${tagData.status}` }, { status: 403 });
     }
 
-    const newBalance = parseFloat((currentBalance - chargeAmount).toFixed(2));
+    const currentBalance = parseFloat(customer.balance);
 
+    // 5. BLOCCO FONDI: Verifica matematica del saldo disponibile
+    if (currentBalance < parsedAmount) {
+      return NextResponse.json({ 
+        success: false, 
+        error: `Credito insufficiente! Il cliente ha € ${currentBalance.toFixed(2)} ma l'importo richiesto è € ${parsedAmount.toFixed(2)}.` 
+      }, { status: 400 });
+    }
+
+    // Calcolo del nuovo saldo (andrà a rispettare il vincolo CHECK balance >= 0.00)
+    const newBalance = currentBalance - parsedAmount;
+
+    // 6. OPERAZIONE AGGIORNAMENTO: Scala il credito dall'account del cliente
     const { error: updateError } = await supabase
       .from('customers')
       .update({ balance: newBalance })
-      .eq('id', customerId);
+      .eq('id', customer.id);
 
-    if (updateError) throw new Error("Errore durante l'addebito del saldo");
+    if (updateError) {
+      return NextResponse.json({ success: false, error: `Errore durante l'addebito: ${updateError.message}` }, { status: 500 });
+    }
 
-    await supabase
+    // 7. STORICO: Registra il movimento nella tabella delle transazioni
+    // Nota: Inviamo parsedAmount positivo (es: 5.50) e tipo 'purchase' per soddisfare il vincolo 'CHECK (amount > 0)'
+    const { error: txError } = await supabase
       .from('transactions')
-      .insert([
-        { customer_id: customerId, type: 'purchase', amount: chargeAmount, description: description || 'Consumazione Bar Lido' }
-      ]);
+      .insert({
+        customer_id: customer.id,
+        type: 'purchase',
+        amount: parsedAmount,
+        description: description || 'Addebito Cassa / Consumazione Lido'
+      });
 
-    return NextResponse.json({ success: true, message: "Pagamento completato", remaining_balance: newBalance });
+    if (txError) {
+      // Nota: Il saldo è stato scalato ma la traccia del log è fallita. 
+      // Lo segnaliamo nei log del server ma diamo comunque successo al cliente per non bloccare la cassa.
+      console.error(`⚠️ Transazione scalata ma errore scrittura storico: ${txError.message}`);
+    }
 
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Errore sconosciuto";
-    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
+    // Risposta di successo al frontend con il saldo aggiornato in tempo reale
+    return NextResponse.json({
+      success: true,
+      message: 'Pagamento effettuato con successo!',
+      client_name: customer.name,
+      previous_balance: currentBalance,
+      new_balance: newBalance
+    });
+
+  } catch (err) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
