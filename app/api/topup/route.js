@@ -1,100 +1,50 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// 🛑 FORZA NEXT.JS A IGNORARE QUESTO FILE IN FASE DI BUILD SU VERCEL
-export const dynamic = 'force-dynamic';
+import { supabase } from '@/lib/supabase';
 
 export async function POST(request) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const { uid, amount } = await request.json();
+    const topupAmount = parseFloat(amount);
 
-    // 1. Controllo di sicurezza sulle chiavi d'ambiente
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return NextResponse.json({ success: false, error: 'Configurazione database mancante' }, { status: 500 });
+    if (!uid || isNaN(topupAmount) || topupAmount <= 0) {
+      return NextResponse.json({ success: false, error: 'Importo inserito non valido' }, { status: 400 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    
-    // Riceve l'UID della tessera e l'importo da accreditare
-    const { uid, amount, description } = await request.json();
-    const parsedAmount = parseFloat(amount);
-
-    // 2. Controlli preventivi sui dati ricevuti
-    if (!uid) {
-      return NextResponse.json({ success: false, error: 'Tag UID mancante.' }, { status: 400 });
-    }
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return NextResponse.json({ success: false, error: 'Importo della ricarica non valido (deve essere maggiore di 0).' }, { status: 400 });
-    }
-
-    // 3. Recupera la tessera e il cliente associato
+    // 1. Troviamo a quale cliente appartiene la tessera passata
     const { data: tagData, error: tagError } = await supabase
       .from('nfc_tags')
-      .select(`
-        uid,
-        status,
-        customers (
-          id,
-          name,
-          balance,
-          is_active
-        )
-      `)
+      .select('customer_id, customers!nfc_tags_customer_id_fkey(balance)')
       .eq('uid', uid)
+      .eq('status', 'active')
       .maybeSingle();
 
     if (tagError || !tagData || !tagData.customers) {
-      return NextResponse.json({ success: false, error: 'Tessera non registrata o inesistente a sistema.' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Tessera attiva non trovata nel database' }, { status: 404 });
     }
 
-    // Gestione difensiva se la relazione 'customers' viene restituita come array
-    const customer = Array.isArray(tagData.customers) ? tagData.customers[0] : tagData.customers;
+    const customerId = tagData.customer_id;
+    const currentBalance = parseFloat(tagData.customers.balance);
+    const newBalance = currentBalance + topupAmount;
 
-    // 4. Verifiche sullo stato del conto
-    if (!customer || customer.is_active === false) {
-      return NextResponse.json({ success: false, error: 'Questo account cliente è disattivato.' }, { status: 403 });
-    }
-
-    const currentBalance = parseFloat(customer.balance);
-    
-    // Calcolo del nuovo saldo (addizione per la ricarica)
-    const newBalance = currentBalance + parsedAmount;
-
-    // 5. OPERAZIONE AGGIORNAMENTO: Incrementa il saldo del cliente
+    // 2. Aggiorniamo il saldo sulla tabella customers
     const { error: updateError } = await supabase
       .from('customers')
       .update({ balance: newBalance })
-      .eq('id', customer.id);
+      .eq('id', customerId);
 
-    if (updateError) {
-      return NextResponse.json({ success: false, error: `Errore durante l'accredito: ${updateError.message}` }, { status: 500 });
-    }
+    if (updateError) throw updateError;
 
-    // 6. STORICO: Registra la ricarica nella tabella delle transazioni
-    // Tipo impostato su 'topup' per rispettare il vincolo CHECK delle transazioni
-    const { error: txError } = await supabase
+    // 3. Archiviamo il movimento storico della ricarica
+    await supabase
       .from('transactions')
-      .insert({
-        customer_id: customer.id,
+      .insert([{
+        customer_id: customerId,
         type: 'topup',
-        amount: parsedAmount,
-        description: description || 'Ricarica Credito Cassa'
-      });
+        amount: topupAmount,
+        description: 'Ricarica effettuata in cassa'
+      }]);
 
-    if (txError) {
-      console.error(`⚠️ Ricarica eseguita ma errore scrittura storico: ${txError.message}`);
-    }
-
-    // Risposta di successo al frontend
-    return NextResponse.json({
-      success: true,
-      message: 'Ricarica effettuata con successo!',
-      client_name: customer.name,
-      previous_balance: currentBalance,
-      new_balance: newBalance
-    });
-
+    return NextResponse.json({ success: true, new_balance: newBalance });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
