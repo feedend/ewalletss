@@ -20,7 +20,7 @@ export async function POST(request) {
 
     // Eliminazione della riga dalla tabella per rendere il chip di nuovo "vergine"
     const { error } = await supabase
-      .from('tessere') // Cambia il nome se la tua tabella su Supabase si chiama diversamente
+      .from('nfc_tags') // Cambia il nome se la tua tabella su Supabase si chiama diversamente
       .delete()
       .eq('uid', uid);
 
