@@ -213,7 +213,7 @@ export default function CassaLido() {
 
       if (res.ok && data.success) {
         addLog(`✅ COMPLETATO: ${nameTarget} associato con €${initialBalance.toFixed(2)}`);
-        showToast("Tessera attivata con successo!");
+        showToast("Tessera activated con successo!");
         setRegUid(''); setRegName(''); setRegBalance('0.00');
         regInputRef.current?.focus();
       } else {
@@ -343,7 +343,7 @@ export default function CassaLido() {
               </>
             )}
             {(role === 'gestore' || role === 'bar') && (
-              <button type="button" onClick={() => setTab('pay')} className={`flex-1 py-3 text-xs font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'pay' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-600'}`}>🛒 Pagamento Bar</button>
+              <button type="button" onClick={() => setTab('pay')} className={`flex-1 py-3 text-xs font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'pay' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-600'}`}>🛒 Pagamento</button>
             )}
           </div>
 
@@ -352,7 +352,6 @@ export default function CassaLido() {
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">1. UID Carta (Passa sul lettore)</label>
-                {/* 🔒 Aggiunto maxLength={10} */}
                 <input ref={regInputRef} type="text" maxLength={10} value={regUid} onChange={(e) => setRegUid(e.target.value)} onKeyDown={handleUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-blue-500"/>
               </div>
 
@@ -389,7 +388,6 @@ export default function CassaLido() {
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">UID Carta (Passa sul lettore)</label>
-                {/* 🔒 Aggiunto maxLength={10} */}
                 <input ref={topupInputRef} type="text" maxLength={10} value={topupUid} onChange={(e) => setTopupUid(e.target.value)} onKeyDown={handleTopupUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-emerald-500"/>
               </div>
 
@@ -432,7 +430,6 @@ export default function CassaLido() {
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">UID Carta da Addebitare (Passa sul lettore)</label>
-                {/* 🔒 Aggiunto maxLength={10} */}
                 <input ref={payInputRef} type="text" maxLength={10} value={payUid} onChange={(e) => setPayUid(e.target.value)} onKeyDown={handlePayUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-purple-500"/>
               </div>
 
@@ -448,10 +445,20 @@ export default function CassaLido() {
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Costo Consumazione (€)</label>
                   <input type="number" step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-purple-600 text-lg text-center outline-none focus:border-purple-500"/>
                 </div>
+                
+                {/* 🛠️ MODIFICA: Menu Dropdown al posto dell'input di testo */}
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Causale Spesa</label>
-                  <input type="text" disabled={role === 'bar'} value={payDescription} onChange={(e) => setPayDescription(e.target.value)} className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-semibold outline-none focus:border-purple-500 disabled:opacity-60"/>
+                  <select 
+                    value={payDescription} 
+                    onChange={(e) => setPayDescription(e.target.value)} 
+                    className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-semibold text-slate-800 bg-white outline-none focus:border-purple-500"
+                  >
+                    <option value="Consumazione Bar">Consumazione Bar</option>
+                    <option value="Consumazione Ristorante">Consumazione Ristorante</option>
+                  </select>
                 </div>
+
                 <button type="submit" disabled={!scannedCard} style={{ backgroundColor: scannedCard ? '#9333ea' : '#e2e8f0', color: scannedCard ? '#ffffff' : '#94a3b8', cursor: scannedCard ? 'pointer' : 'not-allowed' }} className="w-full font-bold p-4 rounded-xl text-sm uppercase tracking-wider shadow-md transition-all">🛒 Conferma Addebito</button>
               </form>
 
@@ -489,36 +496,42 @@ export default function CassaLido() {
       {/* 🔒 WINDOW MODALE CHIUSURA TESSERA (Solo Gestore) */}
       {showDeleteModal && role === 'gestore' && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4">
+          {/* 🛠️ FIX RIGIDO COLORE TESTO: Aggiunto text-slate-900 sul contenitore bianco per evitare scritte bianche */}
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4 text-slate-900">
             <div className="text-center">
               <span className="text-4xl">⚠️</span>
               <h3 className="text-lg font-black text-slate-900 mt-2">Chiusura e Riconsegna</h3>
-              <p className="text-xs text-slate-500 mt-1">Stai per disassociare la tessera di <b>{scannedCard?.name}</b>.</p>
+              <p className="text-xs text-slate-700 mt-1">Stai per disassociare la tessera di <b className="text-slate-900">{scannedCard?.name}</b>.</p>
             </div>
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
-              <div className="flex justify-between text-xs text-slate-600"><span>Contante Residuo:</span><span className="font-bold">€{parseFloat(scannedCard?.balance || 0).toFixed(2)}</span></div>
-              <div className="flex justify-between text-xs text-slate-600 border-b border-slate-200 pb-2"><span>Caparra da restituire:</span><span className="font-bold text-blue-600">+ €5.00</span></div>
-              <div className="flex justify-between text-sm font-black text-slate-900 pt-1"><span>TOTALE DA RENDERE:</span><span className="text-emerald-600 text-base">€{(parseFloat(scannedCard?.balance || 0) + 5.00).toFixed(2)}</span></div>
+            
+            {/* Box riepilogo conti con contrasto forzato scurito */}
+            <div className="bg-slate-100 border border-slate-200 rounded-2xl p-4 space-y-2 text-slate-900">
+              <div className="flex justify-between text-xs text-slate-800"><span>Contante Residuo:</span><span className="font-bold text-slate-900">€{parseFloat(scannedCard?.balance || 0).toFixed(2)}</span></div>
+              <div className="flex justify-between text-xs text-slate-800 border-b border-slate-200 pb-2"><span>Caparra da restituire:</span><span className="font-bold text-blue-700">+ €5.00</span></div>
+              <div className="flex justify-between text-sm font-black text-slate-900 pt-1"><span>TOTALE DA RENDERE:</span><span className="text-emerald-700 text-base font-black">€{(parseFloat(scannedCard?.balance || 0) + 5.00).toFixed(2)}</span></div>
             </div>
 
             {scannedCard && parseFloat(scannedCard.balance) > 0 && (
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase">Metodo Rimborso Saldo</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Metodo Rimborso Saldo</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => setSettlementMethod('CONTANTI')} className={`p-2 rounded-lg font-bold text-xs uppercase border-2 transition-all ${settlementMethod === 'CONTANTI' ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600'}`}>💵 Contanti</button>
-                  <button type="button" onClick={() => setSettlementMethod('POS')} className={`p-2 rounded-lg font-bold text-xs uppercase border-2 transition-all ${settlementMethod === 'POS' ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600'}`}>💳 POS / Carta</button>
+                  <button type="button" onClick={() => setSettlementMethod('CONTANTI')} className={`p-2 rounded-lg font-bold text-xs uppercase border-2 transition-all ${settlementMethod === 'CONTANTI' ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-slate-100 border-slate-300 text-slate-900 hover:bg-slate-200'}`}>💵 Contanti</button>
+                  <button type="button" onClick={() => setSettlementMethod('POS')} className={`p-2 rounded-lg font-bold text-xs uppercase border-2 transition-all ${settlementMethod === 'POS' ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-slate-100 border-slate-300 text-slate-900 hover:bg-slate-200'}`}>💳 POS / Carta</button>
                 </div>
               </div>
             )}
 
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start space-x-3">
+            {/* Box caparra con testo scuro forzato text-slate-900 */}
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start space-x-3 text-slate-900">
               <input type="checkbox" id="checkCaparra" checked={depositReturned} onChange={(e) => setDepositReturned(e.target.checked)} className="mt-0.5 h-4 w-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"/>
-              <label htmlFor="checkCaparra" className="text-[11px] text-blue-950 font-medium leading-tight cursor-pointer select-none"><b>Ho ritirato la tessera fisica</b> e confermo di aver restituito i <b>€5.00</b> di caparra al cliente.</label>
+              <label htmlFor="checkCaparra" className="text-[11px] text-slate-900 font-medium leading-tight cursor-pointer select-none">
+                <b className="text-slate-900">Ho ritirato la tessera fisica</b> e confermo di aver restituito i <b className="text-slate-900">€5.00</b> di caparra al cliente.
+              </label>
             </div>
 
             <div className="flex space-x-2 pt-2">
-              <button type="button" onClick={() => { setShowDeleteModal(false); setSettlementMethod(''); setDepositReturned(false); }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold p-3 rounded-xl text-xs uppercase tracking-wider transition-colors">Annulla</button>
-              <button type="button" onClick={confirmDisassociation} disabled={(parseFloat(scannedCard?.balance || 0) > 0 && !settlementMethod) || !depositReturned} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed">Sì, Cancella</button>
+              <button type="button" onClick={() => { setShowDeleteModal(false); setSettlementMethod(''); setDepositReturned(false); }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold p-3 rounded-xl text-xs uppercase tracking-wider transition-colors border border-slate-200">Annulla</button>
+              <button type="button" onClick={confirmDisassociation} disabled={(parseFloat(scannedCard?.balance || 0) > 0 && !settlementMethod) || !depositReturned} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:opacity-100 disabled:cursor-not-allowed">Sì, Cancella</button>
             </div>
           </div>
         </div>
