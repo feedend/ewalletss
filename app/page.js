@@ -61,7 +61,7 @@ export default function CassaLido() {
     setTopupSuccessData(null);
     setPaySuccessData(null);
     setRegUid(''); setRegName(''); setTopupUid(''); setTopupAmount(''); setPayUid(''); setPayAmount(''); 
-    setPayDescription(role === 'bar' ? 'Consumazione Bar' : 'Consumazione Bar');
+    setPayDescription('Consumazione Bar');
 
     if (tab === 'reg') regInputRef.current?.focus();
     if (tab === 'topup') topupInputRef.current?.focus();
@@ -292,7 +292,8 @@ export default function CassaLido() {
     }
 
     try {
-      const res = await fetch('/api/pay-tag', {
+      // 🛠️ PERCORSO CORRETTO DA /api/pay-tag A /api/pay
+      const res = await fetch('/api/pay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ uid: payUid.trim(), amount: chargeAmount, description: payDescription })
@@ -325,7 +326,6 @@ export default function CassaLido() {
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <h1 className="text-lg font-black tracking-wider uppercase">Lido eWallet <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full lowercase">v3.6</span></h1>
           
-          {/* Badge Utente Loggato e Bottone Logout */}
           <div className="flex items-center space-x-4">
             <span className="text-xs font-bold bg-black/20 px-3 py-1.5 rounded-xl border border-white/10">
               👤 {username.toUpperCase()} (<span className="text-amber-300 font-black">{role}</span>)
@@ -335,9 +335,10 @@ export default function CassaLido() {
         </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+      {/* Ridotto temporaneamente il contenitore a max-w-2xl per centrarlo al meglio senza il monitor accanto */}
+      <main className="max-w-2xl mx-auto px-4 py-8 grid grid-cols-1 gap-6 items-start">
         
-        {/* COLONNA SINISTRA: PANNELLI OPERATIVI */}
+        {/* COLONNA PRINCIPALE: PANNELLI OPERATIVI */}
         <div className="space-y-6">
           
           {/* Selettore TAB condizionale in base al ruolo */}
@@ -367,7 +368,6 @@ export default function CassaLido() {
                   <h3 className="text-sm font-black text-rose-900 uppercase">Tessera Già Occupata!</h3>
                   <p className="text-xs text-rose-700">Legata a: <b>{scannedCard.name}</b> Saldo: <b>€{parseFloat(scannedCard.balance).toFixed(2)}</b>.</p>
                   
-                  {/* Solo il gestore può eliminare/disassociare */}
                   {role === 'gestore' ? (
                     <button type="button" onClick={() => setShowDeleteModal(true)} className="w-full bg-rose-600 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md hover:bg-rose-700 transition-colors">🗑️ Disassocia ed Elimina Cliente</button>
                   ) : (
@@ -473,7 +473,7 @@ export default function CassaLido() {
           )}
         </div>
 
-        {/* COLONNA DESTRA: TERMINALE DEI LOG */}
+        {/* 📋 MONITOR LIVE LOGS COMMENTATO TEMPORANEAMENTE
         <div style={{ backgroundColor: '#0f172a', color: '#e2e8f0' }} className="w-full p-5 rounded-3xl font-mono text-xs h-[460px] overflow-y-auto border border-slate-800 shadow-xl md:sticky md:top-8">
           <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-3 tracking-wide uppercase text-[11px]">💾 Registro Operazioni (Log Live)</h3>
           {logs.length === 0 ? (
@@ -486,6 +486,7 @@ export default function CassaLido() {
             </div>
           )}
         </div>
+        */ }
 
       </main>
 
