@@ -11,6 +11,12 @@ export const metadata = {
   },
 }
 
+export const metadata = {
+  title: "eWallets",
+  description: "La tua applicazione",
+  manifest: "/manifest.json", // <-- Aggiungi questa riga esatta
+}
+
 export const viewport = {
   themeColor: "#2563eb",
   width: "device-width",
