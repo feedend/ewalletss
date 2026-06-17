@@ -41,14 +41,13 @@ export default function CassaLido() {
     const savedName = localStorage.getItem('user_name');
 
     if (!savedRole) {
-      router.push('/login'); // Se non c'è sessione, vai al login
+      router.push('/login'); 
     } else {
       setRole(savedRole);
       setUsername(savedName || savedRole);
       
-      // Imposta il tab iniziale corretto in base alle restrizioni
       if (savedRole === 'bar') {
-        setTab('pay'); // Il bar vede solo i pagamenti
+        setTab('pay'); 
       } else {
         setTab('reg');
       }
@@ -292,7 +291,6 @@ export default function CassaLido() {
     }
 
     try {
-      // 🛠️ PERCORSO CORRETTO DA /api/pay-tag A /api/pay
       const res = await fetch('/api/pay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -315,7 +313,6 @@ export default function CassaLido() {
     }
   };
 
-  // Blocca il caricamento se l'utente non è ancora verificato
   if (!role) {
     return <div className="bg-slate-950 min-h-screen text-slate-400 flex items-center justify-center font-mono text-xs">Caricamento sessione protetta...</div>;
   }
@@ -335,13 +332,9 @@ export default function CassaLido() {
         </div>
       </nav>
 
-      {/* Ridotto temporaneamente il contenitore a max-w-2xl per centrarlo al meglio senza il monitor accanto */}
       <main className="max-w-2xl mx-auto px-4 py-8 grid grid-cols-1 gap-6 items-start">
-        
-        {/* COLONNA PRINCIPALE: PANNELLI OPERATIVI */}
         <div className="space-y-6">
           
-          {/* Selettore TAB condizionale in base al ruolo */}
           <div className="bg-slate-200/70 p-1.5 rounded-2xl flex space-x-1 shadow-inner">
             {(role === 'gestore' || role === 'operatore') && (
               <>
@@ -359,7 +352,8 @@ export default function CassaLido() {
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">1. UID Carta (Passa sul lettore)</label>
-                <input ref={regInputRef} type="text" value={regUid} onChange={(e) => setRegUid(e.target.value)} onKeyDown={handleUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-blue-500"/>
+                {/* 🔒 Aggiunto maxLength={10} */}
+                <input ref={regInputRef} type="text" maxLength={10} value={regUid} onChange={(e) => setRegUid(e.target.value)} onKeyDown={handleUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-blue-500"/>
               </div>
 
               {scannedCard ? (
@@ -395,7 +389,8 @@ export default function CassaLido() {
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">UID Carta (Passa sul lettore)</label>
-                <input ref={topupInputRef} type="text" value={topupUid} onChange={(e) => setTopupUid(e.target.value)} onKeyDown={handleTopupUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-emerald-500"/>
+                {/* 🔒 Aggiunto maxLength={10} */}
+                <input ref={topupInputRef} type="text" maxLength={10} value={topupUid} onChange={(e) => setTopupUid(e.target.value)} onKeyDown={handleTopupUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-emerald-500"/>
               </div>
 
               {scannedCard && (
@@ -437,7 +432,8 @@ export default function CassaLido() {
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">UID Carta da Addebitare (Passa sul lettore)</label>
-                <input ref={payInputRef} type="text" value={payUid} onChange={(e) => setPayUid(e.target.value)} onKeyDown={handlePayUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-purple-500"/>
+                {/* 🔒 Aggiunto maxLength={10} */}
+                <input ref={payInputRef} type="text" maxLength={10} value={payUid} onChange={(e) => setPayUid(e.target.value)} onKeyDown={handlePayUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-purple-500"/>
               </div>
 
               {scannedCard && (
