@@ -18,9 +18,9 @@ export async function POST(request) {
     // questo è il punto perfetto per fare una .insert() in una tabella 'storico_chiusure' 
     // salvando l'importo liquidato e il metodo (CONTANTI/POS).
 
-    // Eliminazione della riga dalla tabella per rendere il chip di nuovo "vergine"
+    // 🟢 CORRETTO: Puntiamo a nfc_tags per liberare l'UID fisico del chip
     const { error } = await supabase
-      .from('nfc_tags') // Cambia il nome se la tua tabella su Supabase si chiama diversamente
+      .from('nfc_tags') 
       .delete()
       .eq('uid', uid);
 
