@@ -12,7 +12,7 @@ export default function CassaLido() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [settlementMethod, setSettlementMethod] = useState('');
   
-  // 🟢 NUOVO STATO: Controllo Caparra Obbligatorio
+  // Controllo Caparra Obbligatorio
   const [depositReturned, setDepositReturned] = useState(false);
 
   // Form Reg
@@ -25,7 +25,7 @@ export default function CassaLido() {
   const [topupAmount, setTopupAmount] = useState('');
   const [topupSuccessData, setTopupSuccessData] = useState(null); 
 
-  // 🟢 NUOVI STATI: Form Pagamento
+  // Form Pagamento
   const [payUid, setPayUid] = useState('');
   const [payAmount, setPayAmount] = useState('');
   const [payDescription, setPayDescription] = useState('Consumazione Bar');
@@ -34,7 +34,6 @@ export default function CassaLido() {
   const regInputRef = useRef(null);
   const nameInputRef = useRef(null);
   const topupInputRef = useRef(null);
-  // 🟢 NUOVO REF: Input Pagamento
   const payInputRef = useRef(null);
 
   useEffect(() => {
@@ -132,7 +131,7 @@ export default function CassaLido() {
     }
   };
 
-  // 🔍 🟢 NUOVA LETTURA SALDO (Tab Pagamento)
+  // 🔍 LETTURA SALDO (Tab Pagamento)
   const handlePayUidKeyDown = async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -221,7 +220,7 @@ export default function CassaLido() {
     }
   };
 
-  // 🗑️ DISASSOCIAZIONE & CANCELLAZIONE REALE (CON CONTROLLO ERRORI)
+  // 🗑️ DISASSOCIAZIONE & CANCELLAZIONE REALE
   const confirmDisassociation = async () => {
     if (parseFloat(scannedCard.balance) > 0 && !settlementMethod) {
       showToast("Seleziona il metodo di rimborso obbligatorio!", false);
@@ -246,11 +245,10 @@ export default function CassaLido() {
         showToast("Tessera disassociata e tornata vergine!");
         addLog(`🗑️ ELIMINATA: Liberato UID [${scannedCard.uid}]. Rimborso: ${settlementMethod || 'Nessuno (Saldo 0)'} + Caparra Resa`);
         
-        // Reset stati completato con successo
         setScannedCard(null);
         setShowDeleteModal(false);
         setSettlementMethod('');
-        setDepositReturned(false); // Reset di sicurezza della spunta
+        setDepositReturned(false); 
         setRegUid('');
         regInputRef.current?.focus();
       } else {
@@ -300,7 +298,7 @@ export default function CassaLido() {
     }
   };
 
-  // 🛒 🟢 NUOVA FUNZIONE: ESAGUIZIONE PAGAMENTO STURTTURATO
+  // 🛒 FUNZIONE: ESECUZIONE PAGAMENTO STRUTTURATO
   const handlePayment = async (e) => {
     e.preventDefault();
     if (!scannedCard) {
@@ -330,8 +328,9 @@ export default function CassaLido() {
           uid: payUid.trim(), 
           amount: chargeAmount,
           description: payDescription
-        });
+        })
       });
+      
       const data = await res.json();
       if (res.ok && data.success) {
         setPaySuccessData({
@@ -363,7 +362,7 @@ export default function CassaLido() {
         </div>
       </nav>
 
-      {/* 📦 NUOVO LAYOUT GRIGLIA AFFIANCATA */}
+      {/* 📦 LAYOUT GRIGLIA AFFIANCATA */}
       <main className="max-w-5xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
         
         {/* COLONNA SINISTRA: PANNELLI OPERATIVI */}
@@ -371,7 +370,6 @@ export default function CassaLido() {
           <div className="bg-slate-200/70 p-1.5 rounded-2xl flex space-x-1 shadow-inner">
             <button type="button" onClick={() => setTab('reg')} className={`flex-1 py-3 text-xs font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'reg' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}>➕ Nuova Scheda</button>
             <button type="button" onClick={() => setTab('topup')} className={`flex-1 py-3 text-xs font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'topup' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-600'}`}>⚡ Ricarica</button>
-            {/* 🟢 NUOVO PULSANTE TAB PAGAMENTO */}
             <button type="button" onClick={() => setTab('pay')} className={`flex-1 py-3 text-xs font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'pay' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-600'}`}>🛒 Pagamento</button>
           </div>
 
@@ -469,7 +467,7 @@ export default function CassaLido() {
             </section>
           )}
 
-          {/* 🛒 🟢 NUOVA SEZIONE: TAB PAGAMENTO */}
+          {/* 🛒 TAB PAGAMENTO */}
           {tab === 'pay' && (
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
               <div>
@@ -537,7 +535,7 @@ export default function CassaLido() {
           )}
         </div>
 
-        {/* COLONNA DESTRA: TERMINALE DEI LOG AFFIANCATO */}
+        {/* COLONNA DESTRA: TERMINALE DEI LOG */}
         <div 
           style={{ backgroundColor: '#0f172a', color: '#e2e8f0' }} 
           className="w-full p-5 rounded-3xl font-mono text-xs h-[460px] overflow-y-auto border border-slate-800 shadow-xl md:sticky md:top-8"
@@ -558,7 +556,7 @@ export default function CassaLido() {
 
       </main>
 
-      {/* 🔒 FINESTRA MODALE DI CONFERMA ELIMINAZIONE AGGIORNATA CON CONTROLLO CAPARRA */}
+      {/* 🔒 FINESTRA MODALE DI CONFERMA ELIMINAZIONE CON CONTROLLO CAPARRA */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4">
@@ -568,7 +566,6 @@ export default function CassaLido() {
               <p className="text-xs text-slate-500 mt-1">Stai per disassociare la tessera di <b>{scannedCard?.name}</b>.</p>
             </div>
 
-            {/* Calcolo trasparente dell'importo totale economico */}
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
               <div className="flex justify-between text-xs text-slate-600">
                 <span>Contante Residuo:</span>
@@ -596,7 +593,6 @@ export default function CassaLido() {
               </div>
             )}
 
-            {/* Blocco Interruttore della caparra fisica */}
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start space-x-3">
               <input 
                 type="checkbox" 
@@ -625,7 +621,7 @@ export default function CassaLido() {
         </div>
       )}
 
-      {/* 🛡️ TOAST SYSTEM CORRETTO */}
+      {/* 🛡️ TOAST SYSTEM */}
       {toast.show && (
         <div 
           style={{ 
