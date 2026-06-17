@@ -8,7 +8,7 @@ export default function CassaLido() {
   const [logs, setLogs] = useState([]);
   
   // Stati di controllo tessere esistenti
-  const [scannedCard, setScannedCard] = useState(null); // Contiene i dati se la tessera esiste già
+  const [scannedCard, setScannedCard] = useState(null); 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [settlementMethod, setSettlementMethod] = useState('');
 
@@ -20,14 +20,13 @@ export default function CassaLido() {
   // Form Topup
   const [topupUid, setTopupUid] = useState('');
   const [topupAmount, setTopupAmount] = useState('');
-  const [topupSuccessData, setTopupSuccessData] = useState(null); // Per mostrare saldo iniziale VS finale
+  const [topupSuccessData, setTopupSuccessData] = useState(null); 
 
   const regInputRef = useRef(null);
   const nameInputRef = useRef(null);
   const topupInputRef = useRef(null);
 
   useEffect(() => {
-    // Reset degli stati al cambio tab per evitare confusioni
     setScannedCard(null);
     setTopupSuccessData(null);
     setRegUid(''); setRegName(''); setTopupUid(''); setTopupAmount('');
@@ -63,15 +62,20 @@ export default function CassaLido() {
         const data = await res.json();
 
         if (data.success && data.exists) {
-          // 🚨 ATTENZIONE: La tessera esiste già! Blocchiamo la registrazione.
-          setScannedCard(data.card);
-          addLog(`⚠️ BLOCCO: Il Tag [${uidTarget}] è già assegnato a ${data.card.name} con €${parseFloat(data.card.balance).toFixed(2)}!`);
+          // Allineamento dati: convertiamo la risposta del backend nel formato atteso dal frontend
+          const cardInfo = {
+            uid: uidTarget,
+            name: data.customer?.name || 'Ospite Sconosciuto',
+            balance: data.customer?.balance || 0,
+            id: data.customer?.id
+          };
+          setScannedCard(cardInfo);
+          addLog(`⚠️ BLOCCO: Il Tag [${uidTarget}] è già assegnato a ${cardInfo.name} con €${parseFloat(cardInfo.balance).toFixed(2)}!`);
           showToast("Tessera già occupata! Richiesta disassociazione.", false);
         } else {
-          // La tessera è libera
           setScannedCard(null);
           addLog(`🟢 Tag [${uidTarget}] vergine. Pronto per l'assegnazione.`);
-          nameInputRef.current?.focus(); // Salta al nome
+          nameInputRef.current?.focus(); 
         }
       } catch (err) {
         addLog("❌ Errore durante il controllo del Tag.");
@@ -97,8 +101,14 @@ export default function CassaLido() {
         const data = await res.json();
 
         if (data.success && data.exists) {
-          setScannedCard(data.card);
-          addLog(`👤 Cliente trovato: ${data.card.name} | Saldo Attuale: €${parseFloat(data.card.balance).toFixed(2)}`);
+          const cardInfo = {
+            uid: uidTarget,
+            name: data.customer?.name || 'Ospite Sconosciuto',
+            balance: data.customer?.balance || 0,
+            id: data.customer?.id
+          };
+          setScannedCard(cardInfo);
+          addLog(`👤 Cliente trovato: ${cardInfo.name} | Saldo Attuale: €${parseFloat(cardInfo.balance).toFixed(2)}`);
         } else {
           setScannedCard(null);
           addLog(`❌ ERRORE: Nessun cliente associato al Tag [${uidTarget}].`);
@@ -110,15 +120,57 @@ export default function CassaLido() {
     }
   };
 
+  // 🚀 FUNZIONE DI REGISTRAZIONE REALE SUL DATABASE
   const handleRegister = async (e) => {
     e.preventDefault();
     if (scannedCard) {
       showToast("Azione bloccata. Devi prima liberare la tessera!", false);
       return;
     }
-    // ... (Logica handleRegister)
-    addLog(`✅ COMPLETATO: ${regName.trim()} associato al Tag [${regUid.trim()}]`);
-    setRegUid(''); setRegName(''); setRegBalance('0.00');
+
+    const uidTarget = regUid.trim();
+    const nameTarget = regName.trim();
+    const initialBalance = parseFloat(regBalance) || 0;
+
+    if (!uidTarget) {
+      showToast("Passa la tessera sul lettore!", false);
+      return;
+    }
+    if (!nameTarget) {
+      showToast("Inserisci il nome prima di registrare!", false);
+      return;
+    }
+
+    addLog(`⏳ Invio dati di registrazione a Vercel per [${nameTarget}]...`);
+
+    try {
+      const res = await fetch('/api/register-tag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: uidTarget,
+          name: nameTarget,
+          balance: initialBalance // Inviamo il saldo iniziale
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        addLog(`✅ COMPLETATO: ${nameTarget} associato al Tag [${uidTarget}] con credito iniziale €${initialBalance.toFixed(2)}`);
+        showToast("Tessera attivata con successo!");
+        
+        // Reset dei campi e focus pronto per il prossimo tag
+        setRegUid(''); setRegName(''); setRegBalance('0.00');
+        regInputRef.current?.focus();
+      } else {
+        addLog(`❌ REGISTRAZIONE FALLITA: ${data.error || 'Errore sconosciuto'}`);
+        showToast(data.error || "Errore durante il salvataggio", false);
+      }
+    } catch (err) {
+      addLog("❌ Errore di rete: impossibile raggiungere l'API.");
+      showToast("Errore di connessione server", false);
+    }
   };
 
   // 🗑️ DISASSOCIAZIONE & CANCELLAZIONE SICURA
@@ -139,7 +191,6 @@ export default function CassaLido() {
       showToast("Tessera disassociata e tornata vergine!");
       addLog(`🗑️ ELIMINATA: Liberato UID [${scannedCard.uid}]. Rimborso registrato via: ${settlementMethod || 'Nessuno (Saldo 0)'}`);
       
-      // Resetta tutto
       setScannedCard(null);
       setShowDeleteModal(false);
       setSettlementMethod('');
@@ -165,7 +216,6 @@ export default function CassaLido() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        // Memorizza i dati del doppio Box Saldo
         setTopupSuccessData({
           name: scannedCard.name,
           oldBalance: parseFloat(scannedCard.balance),
@@ -206,16 +256,14 @@ export default function CassaLido() {
               <input ref={regInputRef} type="text" value={regUid} onChange={(e) => setRegUid(e.target.value)} onKeyDown={handleUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-blue-500"/>
             </div>
 
-            {/* SE LA TESSERA È GIÀ OCCUPATA: Mostra blocco rosso di disassociazione */}
             {scannedCard ? (
-              <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 text-center space-y-3 animate-headShake">
+              <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 text-center space-y-3">
                 <span className="text-3xl">🛑</span>
                 <h3 className="text-sm font-black text-rose-900 uppercase">Tessera Già Assegnata!</h3>
                 <p className="text-xs text-rose-700">Questa tessera è legata a: <b>{scannedCard.name}</b> con un saldo attivo di <b>€{parseFloat(scannedCard.balance).toFixed(2)}</b>.</p>
                 <button type="button" onClick={() => setShowDeleteModal(true)} className="w-full bg-rose-600 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md hover:bg-rose-700 transition-colors">🗑️ Disassocia ed Elimina Cliente</button>
               </div>
             ) : (
-              /* SE LA TESSERA È LIBERA: Mostra il form normale */
               <form onSubmit={handleRegister} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">2. Nome Ospite / Ombrellone</label>
@@ -239,9 +287,8 @@ export default function CassaLido() {
               <input ref={topupInputRef} type="text" value={topupUid} onChange={(e) => setTopupUid(e.target.value)} onKeyDown={handleTopupUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-emerald-500"/>
             </div>
 
-            {/* LIVE BOX: Mostra istantaneamente il saldo attuale appena viene passata la carta */}
             {scannedCard && (
-              <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 flex justify-between items-center animate-fade-in">
+              <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 flex justify-between items-center">
                 <div>
                   <span className="text-xs text-slate-400 font-bold uppercase block">Intestatario</span>
                   <span className="font-black text-slate-800 text-base">{scannedCard.name}</span>
@@ -259,7 +306,6 @@ export default function CassaLido() {
                 <input type="number" step="0.01" value={topupAmount} onChange={(e) => setTopupAmount(e.target.value)} placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-emerald-600 text-lg text-center outline-none focus:border-emerald-500"/>
               </div>
               
-              {/* 🛡️ BOTTONE HARDENED CON INLINE STYLES CONTRO I BUG DI CACHE VERCEL */}
               <button 
                 type="submit" 
                 disabled={!scannedCard} 
@@ -274,9 +320,8 @@ export default function CassaLido() {
               </button>
             </form>
 
-            {/* 📥 BOX RICEVUTA DIFFERENZIATO: Mostra Saldo Iniziale VS Saldo Finale ad operazione completata */}
             {topupSuccessData && (
-              <div className="mt-4 bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 space-y-3 animate-bounce-short">
+              <div className="mt-4 bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 space-y-3">
                 <h4 className="text-center font-black text-emerald-900 uppercase text-xs tracking-wider">🎉 Transazione Riuscita con Successo!</h4>
                 <div className="grid grid-cols-3 gap-2 text-center border-t border-emerald-200/60 pt-3">
                   <div>
@@ -297,27 +342,22 @@ export default function CassaLido() {
           </section>
         )}
 
-        {/* 🛡️ LOG LIVE TERMINAL HARDENED CON INLINE STYLES */}
-        <div 
-          style={{ backgroundColor: '#0f172a', color: '#e2e8f0' }} 
-          className="w-full p-4 rounded-2xl font-mono text-xs h-40 overflow-y-auto border border-slate-800 shadow-lg"
-        >
+        <div style={{ backgroundColor: '#0f172a', color: '#e2e8f0' }} className="w-full p-4 rounded-2xl font-mono text-xs h-40 overflow-y-auto border border-slate-800 shadow-lg">
           <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-1.5 mb-2">💾 Registro Operazioni Cassa (Log Live)</h3>
           {logs.length === 0 ? <div className="text-slate-500 italic">In attesa di operazioni...</div> : <div className="space-y-1">{logs.map((log, i) => <div key={i} className="py-0.5 truncate border-b border-slate-850 last:border-0">{log}</div>)}</div>}
         </div>
       </main>
 
-      {/* 🚨 FINESTRA MODALE DI CONFERMA ELIMINAZIONE / RIMBORSO OBBLIGATORIO */}
+      {/* MODALE DI CONFERMA ELIMINAZIONE */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4 animate-scale-up">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4">
             <div className="text-center">
               <span className="text-4xl">⚠️</span>
               <h3 className="text-lg font-black text-slate-900 mt-2">Conferma Disassociazione</h3>
               <p className="text-xs text-slate-500 mt-1">Stai per azzerare la tessera di <b>{scannedCard?.name}</b>.</p>
             </div>
 
-            {/* SE C'È UN SALDO ATTIVO (> 0) SCATTA LA DOMANDA OBBLIGATORIA SUL METODO DI LIQUIDAZIONE */}
             {scannedCard && parseFloat(scannedCard.balance) > 0 ? (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
                 <p className="text-[11px] text-amber-800 font-bold text-center">Il cliente ha un credito residuo di €{parseFloat(scannedCard.balance).toFixed(2)}! Come lo stai rimborsando?</p>
@@ -338,7 +378,6 @@ export default function CassaLido() {
         </div>
       )}
 
-      {/* TOAST SYSTEM */}
       {toast.show && (
         <div className={`fixed bottom-6 right-6 text-white px-6 py-4 rounded-2xl shadow-2xl font-bold flex items-center space-x-3 z-50 max-w-sm border ${toast.isSuccess ? 'bg-emerald-600 border-emerald-500' : 'bg-rose-600 border-rose-500'}`}>
           <span className="text-xl">{toast.isSuccess ? '🎉' : '⚠️'}</span>
