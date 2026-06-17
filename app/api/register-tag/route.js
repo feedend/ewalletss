@@ -16,23 +16,21 @@ export async function POST(request) {
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
     
     // Legge i dati inviati dalla cassa
-    const body = await request.json().catch(() => ({}));
-    const { uid, name } = body;
+   const body = await request.json().catch(() => ({}));
+const { uid, name, balance } = body; // 👈 Aggiungi 'balance' qui
+const initialBalance = parseFloat(balance) || 0; // 👈 Converte in numero
 
-    // 1. Controlli preventivi sui dati ricevuti
-    if (!uid || !uid.trim()) {
-      return NextResponse.json({ success: false, error: 'Impossibile registrare: UID tessera vuoto.' }, { status: 400 });
-    }
-    if (!name || !name.trim()) {
-      return NextResponse.json({ success: false, error: 'Impossibile registrare: Nome cliente vuoto.' }, { status: 400 });
-    }
+// ... controlli ...
 
-    // 2. INSERIMENTO CLIENTE (Crea la riga e recupera l'ID generato automaticamente)
-    const { data: customerData, error: customerError } = await supabase
-      .from('customers')
-      .insert({ name: name.trim() })
-      .select()
-      .single();
+// Modifica l'insert del cliente così:
+const { data: customerData, error: customerError } = await supabase
+  .from('customers')
+  .insert({ 
+    name: name.trim(),
+    balance: initialBalance // 👈 SALVA IL SALDO INIZIALE NEL DB!
+  })
+  .select()
+  .single();
 
     if (customerError) {
       return NextResponse.json({ success: false, error: `Errore creazione cliente: ${customerError.message}` }, { status: 500 });
