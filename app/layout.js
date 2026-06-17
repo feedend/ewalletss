@@ -1,6 +1,6 @@
 export const metadata = {
-  title: 'Lido eWallet Cassa',
-  description: 'Gestione eWallet per braccialetti NFC',
+  title: 'Lido Cashless Cassa',
+  description: 'Gestione Cashless per carte NFC',
 }
 
 export default function RootLayout({ children }) {
