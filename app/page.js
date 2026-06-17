@@ -321,7 +321,7 @@ export default function CassaLido() {
     <div className="bg-slate-50 font-sans min-h-screen text-slate-800 antialiased relative">
       <nav className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 text-white p-4 shadow-lg">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
-          <h1 className="text-lg font-black tracking-wider uppercase">Lido eWallet <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full lowercase">v3.6</span></h1>
+          <h1 className="text-lg font-black tracking-wider uppercase">Lido Cassa Cashless <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full lowercase">v3.6</span></h1>
           
           <div className="flex items-center space-x-4">
             <span className="text-xs font-bold bg-black/20 px-3 py-1.5 rounded-xl border border-white/10">
@@ -456,6 +456,7 @@ export default function CassaLido() {
                   >
                     <option value="Consumazione Bar">Consumazione Bar</option>
                     <option value="Consumazione Ristorante">Consumazione Ristorante</option>
+                      <option value="Pagamento Ingresso">Pagamento Ingresso</option>
                   </select>
                 </div>
 
