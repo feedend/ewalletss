@@ -45,7 +45,7 @@ export default function CassaLido() {
     setTimeout(() => setToast({ show: false, message: '', isSuccess: true }), 4500);
   };
 
-  // 🔍 FUNZIONE CATTURA & VERIFICA UID (Tab Registrazione)
+  // 🔍 VERIFICA UID (Tab Registrazione)
   const handleUidKeyDown = async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -62,7 +62,6 @@ export default function CassaLido() {
         const data = await res.json();
 
         if (data.success && data.exists) {
-          // Allineamento dati: convertiamo la risposta del backend nel formato atteso dal frontend
           const cardInfo = {
             uid: uidTarget,
             name: data.customer?.name || 'Ospite Sconosciuto',
@@ -83,7 +82,7 @@ export default function CassaLido() {
     }
   };
 
-  // 🔍 FUNZIONE CATTURA & LETTURA SALDO INIZIALE (Tab Ricarica)
+  // 🔍 LETTURA SALDO (Tab Ricarica)
   const handleTopupUidKeyDown = async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -120,7 +119,7 @@ export default function CassaLido() {
     }
   };
 
-  // 🚀 FUNZIONE DI REGISTRAZIONE REALE SUL DATABASE
+  // 🚀 ATTIVAZIONE REALE TESSERA
   const handleRegister = async (e) => {
     e.preventDefault();
     if (scannedCard) {
@@ -150,7 +149,7 @@ export default function CassaLido() {
         body: JSON.stringify({
           uid: uidTarget,
           name: nameTarget,
-          balance: initialBalance // Inviamo il saldo iniziale
+          balance: initialBalance 
         })
       });
 
@@ -160,7 +159,6 @@ export default function CassaLido() {
         addLog(`✅ COMPLETATO: ${nameTarget} associato al Tag [${uidTarget}] con credito iniziale €${initialBalance.toFixed(2)}`);
         showToast("Tessera attivata con successo!");
         
-        // Reset dei campi e focus pronto per il prossimo tag
         setRegUid(''); setRegName(''); setRegBalance('0.00');
         regInputRef.current?.focus();
       } else {
@@ -173,14 +171,14 @@ export default function CassaLido() {
     }
   };
 
-  // 🗑️ DISASSOCIAZIONE & CANCELLAZIONE SICURA
+  // 🗑️ DISASSOCIAZIONE & CANCELLAZIONE REALE (CON CONTROLLO ERRORI)
   const confirmDisassociation = async () => {
     if (parseFloat(scannedCard.balance) > 0 && !settlementMethod) {
       showToast("Seleziona il metodo di rimborso obbligatorio!", false);
       return;
     }
 
-    addLog(`⏳ Disassociazione in corso per UID [${scannedCard.uid}]...`);
+    addLog(`⏳ Invio richiesta di eliminazione per UID [${scannedCard.uid}]...`);
     try {
       const res = await fetch('/api/delete-tag', {
         method: 'POST',
@@ -188,19 +186,30 @@ export default function CassaLido() {
         body: JSON.stringify({ uid: scannedCard.uid, method: settlementMethod })
       });
       
-      showToast("Tessera disassociata e tornata vergine!");
-      addLog(`🗑️ ELIMINATA: Liberato UID [${scannedCard.uid}]. Rimborso registrato via: ${settlementMethod || 'Nessuno (Saldo 0)'}`);
-      
-      setScannedCard(null);
-      setShowDeleteModal(false);
-      setSettlementMethod('');
-      setRegUid('');
-      regInputRef.current?.focus();
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        showToast("Tessera disassociata e tornata vergine!");
+        addLog(`🗑️ ELIMINATA: Liberato UID [${scannedCard.uid}]. Rimborso: ${settlementMethod || 'Nessuno (Saldo 0)'}`);
+        
+        // Reset stati completato con successo
+        setScannedCard(null);
+        setShowDeleteModal(false);
+        setSettlementMethod('');
+        setRegUid('');
+        regInputRef.current?.focus();
+      } else {
+        // Se il backend risponde con un errore (es. riga bloccata o vincolo DB)
+        addLog(`❌ ERRORE ELIMINAZIONE BACKEND: ${data.error || 'Impossibile eliminare'}`);
+        showToast(data.error || "Il server ha rifiutato l'eliminazione", false);
+      }
     } catch (err) {
-      showToast("Errore durante l'eliminazione", false);
+      addLog("❌ Errore di rete durante la disassociation.");
+      showToast("Errore di connessione al server", false);
     }
   };
 
+  // 💰 RICARICA SALDO
   const handleTopup = async (e) => {
     e.preventDefault();
     if (!scannedCard) {
@@ -228,6 +237,9 @@ export default function CassaLido() {
         
         setTopupUid(''); setTopupAmount(''); setScannedCard(null);
         topupInputRef.current?.focus();
+      } else {
+        addLog(`❌ ERRORE RICARICA: ${data.error || 'Errore sconosciuto'}`);
+        showToast(data.error || "Ricarica fallita", false);
       }
     } catch (err) {
       showToast("Errore serverless", false);
@@ -237,118 +249,138 @@ export default function CassaLido() {
   return (
     <div className="bg-slate-50 font-sans min-h-screen text-slate-800 antialiased relative">
       <nav className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 text-white p-4 shadow-lg">
-        <div className="max-w-xl mx-auto flex justify-between items-center">
-          <h1 className="text-lg font-black tracking-wider uppercase">Lido eWallet <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full lowercase">v3.5-safe</span></h1>
+        <div className="max-w-5xl mx-auto flex justify-between items-center">
+          <h1 className="text-lg font-black tracking-wider uppercase">Lido eWallet <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full lowercase">v3.6-stable</span></h1>
         </div>
       </nav>
 
-      <main className="max-w-xl mx-auto px-4 py-8 space-y-6">
-        <div className="bg-slate-200/70 p-1.5 rounded-2xl flex space-x-1 shadow-inner">
-          <button type="button" onClick={() => setTab('reg')} className={`flex-1 py-3 text-sm font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'reg' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}>➕ Nuova Scheda</button>
-          <button type="button" onClick={() => setTab('topup')} className={`flex-1 py-3 text-sm font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'topup' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-600'}`}>⚡ Ricarica</button>
-        </div>
+      {/* 📦 NUOVO LAYOUT GRIGLIA AFFIANCATA */}
+      <main className="max-w-5xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        
+        {/* COLONNA SINISTRA: PANNELLI OPERATIVI */}
+        <div className="space-y-6">
+          <div className="bg-slate-200/70 p-1.5 rounded-2xl flex space-x-1 shadow-inner">
+            <button type="button" onClick={() => setTab('reg')} className={`flex-1 py-3 text-sm font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'reg' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}>➕ Nuova Scheda</button>
+            <button type="button" onClick={() => setTab('topup')} className={`flex-1 py-3 text-sm font-black tracking-wide uppercase rounded-xl transition-all ${tab === 'topup' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-600'}`}>⚡ Ricarica</button>
+          </div>
 
-        {/* 📋 TAB REGISTRAZIONE */}
-        {tab === 'reg' && (
-          <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">1. UID Carta (Passa sul lettore)</label>
-              <input ref={regInputRef} type="text" value={regUid} onChange={(e) => setRegUid(e.target.value)} onKeyDown={handleUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-blue-500"/>
-            </div>
-
-            {scannedCard ? (
-              <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 text-center space-y-3">
-                <span className="text-3xl">🛑</span>
-                <h3 className="text-sm font-black text-rose-900 uppercase">Tessera Già Assegnata!</h3>
-                <p className="text-xs text-rose-700">Questa tessera è legata a: <b>{scannedCard.name}</b> con un saldo attivo di <b>€{parseFloat(scannedCard.balance).toFixed(2)}</b>.</p>
-                <button type="button" onClick={() => setShowDeleteModal(true)} className="w-full bg-rose-600 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md hover:bg-rose-700 transition-colors">🗑️ Disassocia ed Elimina Cliente</button>
-              </div>
-            ) : (
-              <form onSubmit={handleRegister} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">2. Nome Ospite / Ombrellone</label>
-                  <input ref={nameInputRef} type="text" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="Es. Ombrellone 12" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl outline-none focus:border-blue-500"/>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">3. Carico Denaro Iniziale (€)</label>
-                  <input type="number" step="0.01" value={regBalance} onChange={(e) => setRegBalance(e.target.value)} className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-blue-600 text-lg text-center outline-none focus:border-blue-500"/>
-                </div>
-                <button type="submit" className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold p-4 rounded-xl text-sm uppercase tracking-wider shadow-md">🚀 Attiva Nuova Tessera</button>
-              </form>
-            )}
-          </section>
-        )}
-
-        {/* 💰 TAB RICARICA */}
-        {tab === 'topup' && (
-          <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">UID Carta (Passa sul lettore)</label>
-              <input ref={topupInputRef} type="text" value={topupUid} onChange={(e) => setTopupUid(e.target.value)} onKeyDown={handleTopupUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-emerald-500"/>
-            </div>
-
-            {scannedCard && (
-              <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 flex justify-between items-center">
-                <div>
-                  <span className="text-xs text-slate-400 font-bold uppercase block">Intestatario</span>
-                  <span className="font-black text-slate-800 text-base">{scannedCard.name}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs text-slate-400 font-bold uppercase block">Saldo Corrente</span>
-                  <span className="font-black text-amber-500 text-xl">€{parseFloat(scannedCard.balance).toFixed(2)}</span>
-                </div>
-              </div>
-            )}
-
-            <form onSubmit={handleTopup} className="space-y-4">
+          {/* 📋 TAB REGISTRAZIONE */}
+          {tab === 'reg' && (
+            <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Importo Cash da Aggiungere (€)</label>
-                <input type="number" step="0.01" value={topupAmount} onChange={(e) => setTopupAmount(e.target.value)} placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-emerald-600 text-lg text-center outline-none focus:border-emerald-500"/>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">1. UID Carta (Passa sul lettore)</label>
+                <input ref={regInputRef} type="text" value={regUid} onChange={(e) => setRegUid(e.target.value)} onKeyDown={handleUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-blue-500"/>
               </div>
-              
-              <button 
-                type="submit" 
-                disabled={!scannedCard} 
-                style={{ 
-                  backgroundColor: scannedCard ? '#10b981' : '#e2e8f0', 
-                  color: scannedCard ? '#ffffff' : '#94a3b8',
-                  cursor: scannedCard ? 'pointer' : 'not-allowed'
-                }} 
-                className="w-full font-bold p-4 rounded-xl text-sm uppercase tracking-wider shadow-md transition-all"
-              >
-                💰 Conferma ed Incassa
-              </button>
-            </form>
 
-            {topupSuccessData && (
-              <div className="mt-4 bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 space-y-3">
-                <h4 className="text-center font-black text-emerald-900 uppercase text-xs tracking-wider">🎉 Transazione Riuscita con Successo!</h4>
-                <div className="grid grid-cols-3 gap-2 text-center border-t border-emerald-200/60 pt-3">
+              {scannedCard ? (
+                <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 text-center space-y-3">
+                  <span className="text-3xl">🛑</span>
+                  <h3 className="text-sm font-black text-rose-900 uppercase">Tessera Già Assegnata!</h3>
+                  <p className="text-xs text-rose-700">Questa tessera è legata a: <b>{scannedCard.name}</b> con un saldo attivo di <b>€{parseFloat(scannedCard.balance).toFixed(2)}</b>.</p>
+                  <button type="button" onClick={() => setShowDeleteModal(true)} className="w-full bg-rose-600 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md hover:bg-rose-700 transition-colors">🗑️ Disassocia ed Elimina Cliente</button>
+                </div>
+              ) : (
+                <form onSubmit={handleRegister} className="space-y-4">
                   <div>
-                    <span className="block text-[10px] font-bold text-emerald-700 uppercase">Saldo Vecchio</span>
-                    <span className="font-mono text-sm text-slate-600">€{topupSuccessData.oldBalance.toFixed(2)}</span>
-                  </div>
-                  <div className="bg-emerald-200/50 rounded-lg py-1">
-                    <span className="block text-[10px] font-bold text-emerald-800 uppercase">Caricato</span>
-                    <span className="font-black text-sm text-emerald-700">+€{topupSuccessData.added.toFixed(2)}</span>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">2. Nome Ospite / Ombrellone</label>
+                    <input ref={nameInputRef} type="text" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="Es. Ombrellone 12" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl outline-none focus:border-blue-500"/>
                   </div>
                   <div>
-                    <span className="block text-[10px] font-bold text-emerald-700 uppercase">Nuovo Saldo</span>
-                    <span className="font-mono text-base font-black text-slate-900">€{topupSuccessData.newBalance.toFixed(2)}</span>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">3. Carico Denaro Iniziale (€)</label>
+                    <input type="number" step="0.01" value={regBalance} onChange={(e) => setRegBalance(e.target.value)} className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-blue-600 text-lg text-center outline-none focus:border-blue-500"/>
+                  </div>
+                  <button type="submit" className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold p-4 rounded-xl text-sm uppercase tracking-wider shadow-md">🚀 Attiva Nuova Tessera</button>
+                </form>
+              )}
+            </section>
+          )}
+
+          {/* 💰 TAB RICARICA */}
+          {tab === 'topup' && (
+            <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">UID Carta (Passa sul lettore)</label>
+                <input ref={topupInputRef} type="text" value={topupUid} onChange={(e) => setTopupUid(e.target.value)} onKeyDown={handleTopupUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-emerald-500"/>
+              </div>
+
+              {scannedCard && (
+                <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 flex justify-between items-center">
+                  <div>
+                    <span className="text-xs text-slate-400 font-bold uppercase block">Intestatario</span>
+                    <span className="font-black text-slate-800 text-base">{scannedCard.name}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs text-slate-400 font-bold uppercase block">Saldo Corrente</span>
+                    <span className="font-black text-amber-500 text-xl">€{parseFloat(scannedCard.balance).toFixed(2)}</span>
                   </div>
                 </div>
-              </div>
-            )}
-          </section>
-        )}
+              )}
 
-        <div style={{ backgroundColor: '#0f172a', color: '#e2e8f0' }} className="w-full p-4 rounded-2xl font-mono text-xs h-40 overflow-y-auto border border-slate-800 shadow-lg">
-          <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-1.5 mb-2">💾 Registro Operazioni Cassa (Log Live)</h3>
-          {logs.length === 0 ? <div className="text-slate-500 italic">In attesa di operazioni...</div> : <div className="space-y-1">{logs.map((log, i) => <div key={i} className="py-0.5 truncate border-b border-slate-850 last:border-0">{log}</div>)}</div>}
+              <form onSubmit={handleTopup} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Importo Cash da Aggiungere (€)</label>
+                  <input type="number" step="0.01" value={topupAmount} onChange={(e) => setTopupAmount(e.target.value)} placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-emerald-600 text-lg text-center outline-none focus:border-emerald-500"/>
+                </div>
+                
+                <button 
+                  type="submit" 
+                  disabled={!scannedCard} 
+                  style={{ 
+                    backgroundColor: scannedCard ? '#10b981' : '#e2e8f0', 
+                    color: scannedCard ? '#ffffff' : '#94a3b8',
+                    cursor: scannedCard ? 'pointer' : 'not-allowed'
+                  }} 
+                  className="w-full font-bold p-4 rounded-xl text-sm uppercase tracking-wider shadow-md transition-all"
+                >
+                  💰 Conferma ed Incassa
+                </button>
+              </form>
+
+              {topupSuccessData && (
+                <div className="mt-4 bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 space-y-3">
+                  <h4 className="text-center font-black text-emerald-900 uppercase text-xs tracking-wider">🎉 Transazione Riuscita con Successo!</h4>
+                  <div className="grid grid-cols-3 gap-2 text-center border-t border-emerald-200/60 pt-3">
+                    <div>
+                      <span className="block text-[10px] font-bold text-emerald-700 uppercase">Saldo Vecchio</span>
+                      <span className="font-mono text-sm text-slate-600">€{topupSuccessData.oldBalance.toFixed(2)}</span>
+                    </div>
+                    <div className="bg-emerald-200/50 rounded-lg py-1">
+                      <span className="block text-[10px] font-bold text-emerald-800 uppercase">Caricato</span>
+                      <span className="font-black text-sm text-emerald-700">+€{topupSuccessData.added.toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-bold text-emerald-700 uppercase">Nuovo Saldo</span>
+                      <span className="font-mono text-base font-black text-slate-900">€{topupSuccessData.newBalance.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
         </div>
+
+        {/* COLONNA DESTRA: TERMINALE DEI LOG AFFIANCATO */}
+        <div 
+          style={{ backgroundColor: '#0f172a', color: '#e2e8f0' }} 
+          className="w-full p-5 rounded-3xl font-mono text-xs h-[460px] overflow-y-auto border border-slate-800 shadow-xl md:sticky md:top-8"
+        >
+          <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-3 tracking-wide uppercase text-[11px]">💾 Registro Operazioni Cassa (Log Live)</h3>
+          {logs.length === 0 ? (
+            <div className="text-slate-500 italic">In attesa di operazioni...</div>
+          ) : (
+            <div className="space-y-1.5">
+              {logs.map((log, i) => (
+                <div key={i} className="py-0.5 truncate border-b border-slate-900 last:border-0 text-slate-300">
+                  {log}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
       </main>
 
-      {/* MODALE DI CONFERMA ELIMINAZIONE */}
+      {/* FINESTRA MODALE DI CONFERMA ELIMINAZIONE */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4">
@@ -378,10 +410,18 @@ export default function CassaLido() {
         </div>
       )}
 
+      {/* 🛡️ TOAST SYSTEM CORRETTO CON INLINE STYLES FORZATI CONTRO SFONDO BIANCO */}
       {toast.show && (
-        <div className={`fixed bottom-6 right-6 text-white px-6 py-4 rounded-2xl shadow-2xl font-bold flex items-center space-x-3 z-50 max-w-sm border ${toast.isSuccess ? 'bg-emerald-600 border-emerald-500' : 'bg-rose-600 border-rose-500'}`}>
+        <div 
+          style={{ 
+            backgroundColor: toast.isSuccess ? '#10b981' : '#ef4444', 
+            borderColor: toast.isSuccess ? '#059669' : '#dc2626',
+            color: '#ffffff'
+          }}
+          className="fixed bottom-6 right-6 px-6 py-4 rounded-2xl shadow-2xl font-bold flex items-center space-x-3 z-50 max-w-sm border"
+        >
           <span className="text-xl">{toast.isSuccess ? '🎉' : '⚠️'}</span>
-          <span className="text-sm font-bold tracking-wide">{toast.message}</span>
+          <span className="text-sm font-bold tracking-wide text-white">{toast.message}</span>
         </div>
       )}
     </div>
