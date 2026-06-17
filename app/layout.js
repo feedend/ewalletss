@@ -1,6 +1,21 @@
 export const metadata = {
   title: 'Lido Cashless Cassa',
   description: 'Gestione Cashless per carte NFC',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Lido Cashless Cassa",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+}
+
+export const viewport = {
+  themeColor: "#2563eb",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1, // Evita lo zoom automatico fastidioso sui dispositivi mobile quando si legge l'UID
 }
 
 export default function RootLayout({ children }) {
