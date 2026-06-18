@@ -1,12 +1,12 @@
 {
-  "theme_color": "#000000",
+  "theme_color": "#2563eb",
   "background_color": "#ffffff",
   "display": "standalone",
   "scope": "/",
   "start_url": "/",
-  "name": "eWallets",
-  "short_name": "eWallets",
-  "description": "La tua applicazione eWallets",
+  "name": "Lido Cashless Cassa",
+  "short_name": "Lido Cassa",
+  "description": "Gestione Cashless per carte NFC",
   "icons": [
     {
       "src": "/icon-192x192.png",
