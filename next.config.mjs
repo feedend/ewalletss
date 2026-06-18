@@ -1,18 +1,13 @@
-const withPWA = require("@ducanh2912/next-pwa").default({
+import withPWAInit from "@ducanh2912/next-pwa";
+
+const withPWA = withPWAInit({
   dest: "public",
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
-  reloadOnOnline: true,
-  swcMinify: true,
   disable: process.env.NODE_ENV === "development",
-  workboxOptions: {
-    disableDevLogs: true,
-  },
 });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Se avevi altre configurazioni tue vecchie (es. immagini o domini), lasciale qui dentro
+  /* Se avevi altre configurazioni tue (es. domini di Supabase, immagini, ecc.), lasciale qui dentro */
 };
 
-module.exports = withPWA(nextConfig);
+export default withPWA(nextConfig);
