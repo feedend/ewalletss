@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function Login() {
@@ -8,7 +8,18 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const router = useRouter();
+
+  // Controllo sessione attiva all'avvio (Eseguito in modo sicuro solo sul client)
+  useEffect(() => {
+    const savedRole = localStorage.getItem('user_role');
+    if (savedRole) {
+      router.push('/');
+    } else {
+      setIsCheckingSession(false);
+    }
+  }, [router]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -41,6 +52,17 @@ export default function Login() {
     }
   };
 
+  // Evita il flash del form se l'utente è già loggato e sta venendo reindirizzato
+  if (isCheckingSession) {
+    return (
+      <div className="bg-slate-900 min-h-screen flex justify-center items-center font-sans">
+        <div className="text-white text-xs uppercase tracking-widest animate-pulse">
+          Verifica postazione...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-slate-900 min-h-screen flex flex-col justify-center items-center font-sans p-4 relative overflow-hidden">
       {/* Sfondo geometrico sfumato di design */}
@@ -69,6 +91,10 @@ export default function Login() {
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
+              autoComplete="username"
               placeholder="Es. admin, spiaggia, chiosco" 
               className="w-full p-3.5 bg-white/5 border-2 border-white/10 rounded-xl text-white outline-none focus:border-blue-500 transition-colors placeholder:text-slate-600 text-sm"
             />
@@ -81,6 +107,7 @@ export default function Login() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
               placeholder="••••••••" 
               className="w-full p-3.5 bg-white/5 border-2 border-white/10 rounded-xl text-white outline-none focus:border-blue-500 transition-colors placeholder:text-slate-600 text-sm"
             />
