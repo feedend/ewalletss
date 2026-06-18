@@ -494,49 +494,86 @@ export default function CassaLido() {
 
       </main>
 
-      {/* 🔒 WINDOW MODALE CHIUSURA TESSERA (Solo Gestore) */}
-      {showDeleteModal && role === 'gestore' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          {/* 🛠️ FIX RIGIDO COLORE TESTO: Aggiunto text-slate-900 sul contenitore bianco per evitare scritte bianche */}
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4 text-slate-900">
-            <div className="text-center">
-              <span className="text-4xl">⚠️</span>
-              <h3 className="text-lg font-black text-slate-900 mt-2">Chiusura e Riconsegna</h3>
-              <p className="text-xs text-slate-700 mt-1">Stai per disassociare la tessera di <b className="text-slate-900">{scannedCard?.name}</b>.</p>
+    {/* 🔒 WINDOW MODALE CHIUSURA TESSERA (Solo Gestore) */}
+    {showDeleteModal && role === 'gestore' && (
+      <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        
+        {/* 🛠️ APPLICATO TEMA SCURO COMPLETO ED ELIMINATO DOPPIO TASTO */}
+        <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-5 text-white">
+          
+          <div className="text-center space-y-1">
+            <span className="text-4xl">⚠️</span>
+            <h3 className="text-lg font-black text-white uppercase tracking-wider mt-2">Chiusura e Riconsegna</h3>
+            <p className="text-xs text-slate-400">
+              Stai per disassociare la tessera di <b className="text-sky-400">{scannedCard?.name}</b>.
+            </p>
+          </div>
+          
+          {/* Box riepilogo conti ottimizzato per Dark Mode */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2">
+            <div className="flex justify-between text-xs text-slate-300">
+              <span>Contante Residuo:</span>
+              <span className="font-bold text-white">€{parseFloat(scannedCard?.balance || 0).toFixed(2)}</span>
             </div>
-            
-            {/* Box riepilogo conti con contrasto forzato scurito */}
-            <div className="bg-slate-100 border border-slate-200 rounded-2xl p-4 space-y-2 text-slate-900">
-              <div className="flex justify-between text-xs text-slate-800"><span>Contante Residuo:</span><span className="font-bold text-slate-900">€{parseFloat(scannedCard?.balance || 0).toFixed(2)}</span></div>
-              <div className="flex justify-between text-xs text-slate-800 border-b border-slate-200 pb-2"><span>Caparra da restituire:</span><span className="font-bold text-blue-700">+ €5.00</span></div>
-              <div className="flex justify-between text-sm font-black text-slate-900 pt-1"><span>TOTALE DA RENDERE:</span><span className="text-emerald-700 text-base font-black">€{(parseFloat(scannedCard?.balance || 0) + 5.00).toFixed(2)}</span></div>
+            <div className="flex justify-between text-xs text-slate-300 border-b border-white/10 pb-2">
+              <span>Caparra da restituire:</span>
+              <span className="font-bold text-blue-400">+ €5.00</span>
             </div>
-
-            {scannedCard && parseFloat(scannedCard.balance) > 0 && (
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase">Metodo Rimborso Saldo</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => setSettlementMethod('CONTANTI')} className={`p-2 rounded-lg font-bold text-xs uppercase border-2 transition-all ${settlementMethod === 'CONTANTI' ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-slate-100 border-slate-300 text-slate-900 hover:bg-slate-200'}`}>💵 Contanti</button>
-                  <button type="button" onClick={() => setSettlementMethod('POS')} className={`p-2 rounded-lg font-bold text-xs uppercase border-2 transition-all ${settlementMethod === 'POS' ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-slate-100 border-slate-300 text-slate-900 hover:bg-slate-200'}`}>💳 POS / Carta</button>
-                </div>
-              </div>
-            )}
-
-            {/* Box caparra con testo scuro forzato text-slate-900 */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start space-x-3 text-slate-900">
-              <input type="checkbox" id="checkCaparra" checked={depositReturned} onChange={(e) => setDepositReturned(e.target.checked)} className="mt-0.5 h-4 w-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"/>
-              <label htmlFor="checkCaparra" className="text-[11px] text-slate-900 font-medium leading-tight cursor-pointer select-none">
-                <b className="text-slate-900">Ho ritirato la tessera fisica</b> e confermo di aver restituito i <b className="text-slate-900">€5.00</b> di caparra al cliente.
-              </label>
-            </div>
-
-            <div className="flex space-x-2 pt-2">
-              <button type="button" onClick={() => { setShowDeleteModal(false); setSettlementMethod(''); setDepositReturned(false); }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold p-3 rounded-xl text-xs uppercase tracking-wider transition-colors border border-slate-200">Annulla</button>
-              <button type="button" onClick={confirmDisassociation} disabled={(parseFloat(scannedCard?.balance || 0) > 0 && !settlementMethod) || !depositReturned} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md transition-colors disabled:bg-slate-200 disabled:text-slate-400 disabled:opacity-100 disabled:cursor-not-allowed">Sì, Cancella</button>
+            <div className="flex justify-between text-sm font-black text-white pt-1">
+              <span>TOTALE DA RENDERE:</span>
+              <span className="text-emerald-400 text-base font-black">
+                €{(parseFloat(scannedCard?.balance || 0) + 5.00).toFixed(2)}
+              </span>
             </div>
           </div>
+
+          {/* Informativa Metodo Unico (Sostituisce i vecchi bottoni di scelta) */}
+          {scannedCard && parseFloat(scannedCard.balance) > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
+              <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Metodo di Rimborso</p>
+              <p className="text-xs text-slate-300 font-bold mt-0.5">💵 Solo Contanti (Cash Only)</p>
+            </div>
+          )}
+
+          {/* Box caparra riadattato per layout scuro */}
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-start space-x-3">
+            <input 
+              type="checkbox" 
+              id="checkCaparra" 
+              checked={depositReturned} 
+              onChange={(e) => setDepositReturned(e.target.checked)} 
+              className="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
+            />
+            <label htmlFor="checkCaparra" className="text-[11px] text-slate-300 font-medium leading-tight cursor-pointer select-none">
+              Ho ritirato la <b className="text-white">tessera fisica</b> e confermo di aver restituito i <b className="text-blue-400">€5.00</b> di caparra al cliente.
+            </label>
+          </div>
+
+          {/* Pulsanti di Azione finale */}
+          <div className="flex space-x-2 pt-1">
+            <button 
+              type="button" 
+              onClick={() => { setShowDeleteModal(false); setSettlementMethod(''); setDepositReturned(false); }} 
+              className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 font-bold p-3 rounded-xl text-xs uppercase tracking-wider transition-colors border border-white/10"
+            >
+              Annulla
+            </button>
+            <button 
+              type="button" 
+              onClick={() => { 
+                setSettlementMethod('CONTANTI'); // Forza il valore prima di lanciare la disassociazione
+                confirmDisassociation(); 
+              }} 
+              disabled={!depositReturned} 
+              className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed disabled:shadow-none"
+            >
+              💵 Rimborsa e Chiudi
+            </button>
+          </div>
+
         </div>
-      )}
+      </div>
+    )}
 
       {/* 🛡️ TOAST SYSTEM */}
       {toast.show && (
