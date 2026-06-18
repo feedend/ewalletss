@@ -7,7 +7,7 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* Se avevi altre configurazioni tue (es. domini di Supabase, immagini, ecc.), lasciale qui dentro */
+  /* Se avevi altre configurazioni tue (es. domini, immagini, ecc.), lasciale qui dentro */
 };
 
 export default withPWA(nextConfig);
