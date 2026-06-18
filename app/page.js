@@ -505,7 +505,7 @@ export default function CassaLido() {
                 className="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
               />
               <label htmlFor="checkCaparra" className="text-[11px] text-slate-300 font-medium leading-tight cursor-pointer select-none">
-                Ho ritirato la <b className="text-white">tessera fisica</b> e confermo di aver restituito i <b className="text-blue-400">€5.00</b> di caparra al cliente.
+                Ho ritirato la <b className="text-white">tessera fisica</b> e confermo di aver restituito i <b className="text-blue-400">€5.00</b> di caparra ed il Credito Residuo al cliente.
               </label>
             </div>
 
