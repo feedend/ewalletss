@@ -1,12 +1,12 @@
 {
-  "theme_color": "#2563eb",
+  "theme_color": "#0284c7",
   "background_color": "#ffffff",
   "display": "standalone",
   "scope": "/",
   "start_url": "/",
-  "name": "Lido Cashless Cassa",
+  "name": "Lido Cashless - Cassa Gestione",
   "short_name": "Lido Cassa",
-  "description": "Gestione Cashless per carte NFC",
+  "description": "Applicazione ufficiale per la gestione cashless e lettura carte NFC del Lido",
   "icons": [
     {
       "src": "/icon-192x192.png",
