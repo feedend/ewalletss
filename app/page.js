@@ -494,12 +494,12 @@ export default function CassaLido() {
 
       </main>
 
-    {/* 🔒 WINDOW MODALE CHIUSURA TESSERA (Solo Gestore) */}
+  {/* 🔒 WINDOW MODALE CHIUSURA TESSERA (Solo Gestore) */}
     {showDeleteModal && role === 'gestore' && (
-      <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-md z-50 flex items-center justify-center p-4">
         
-        {/* 🛠️ APPLICATO TEMA SCURO COMPLETO ED ELIMINATO DOPPIO TASTO */}
-        <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-5 text-white">
+        {/* 🛠️ FIX RIGIDO ANTI-SOVRAPPOSIZIONE: Colore solido garantito e z-index isolato */}
+        <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-5 text-white relative z-50">
           
           <div className="text-center space-y-1">
             <span className="text-4xl">⚠️</span>
@@ -527,7 +527,7 @@ export default function CassaLido() {
             </div>
           </div>
 
-          {/* Informativa Metodo Unico (Sostituisce i vecchi bottoni di scelta) */}
+          {/* Informativa Metodo Unico */}
           {scannedCard && parseFloat(scannedCard.balance) > 0 && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
               <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Metodo di Rimborso</p>
@@ -561,7 +561,7 @@ export default function CassaLido() {
             <button 
               type="button" 
               onClick={() => { 
-                setSettlementMethod('CONTANTI'); // Forza il valore prima di lanciare la disassociazione
+                setSettlementMethod('CONTANTI'); 
                 confirmDisassociation(); 
               }} 
               disabled={!depositReturned} 
