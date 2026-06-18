@@ -15,7 +15,6 @@ export default function CassaLido() {
   // Stati di controllo tessere esistenti
   const [scannedCard, setScannedCard] = useState(null); 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [settlementMethod, setSettlementMethod] = useState('');
   const [depositReturned, setDepositReturned] = useState(false);
 
   // Form Stati
@@ -54,7 +53,7 @@ export default function CassaLido() {
     }
   }, [router]);
 
-  // Gestione focus dei tab
+  // Gestione focus dei tab e reset stati temporanei
   useEffect(() => {
     setScannedCard(null);
     setTopupSuccessData(null);
@@ -83,6 +82,33 @@ export default function CassaLido() {
     setTimeout(() => setToast({ show: false, message: '', isSuccess: true }), 4500);
   };
 
+  // 🔄 FUNZIONE CENTRALIZZATA DI LETTURA TAG (Evita di duplicare la Fetch 3 volte)
+  const fetchTagData = async (uidTarget, logPrefix) => {
+    addLog(`${logPrefix} [${uidTarget}]...`);
+    try {
+      const res = await fetch('/api/get-tag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: uidTarget })
+      });
+      const data = await res.json();
+
+      if (data.success && data.exists) {
+        return {
+          uid: uidTarget,
+          name: data.customer?.name || 'Ospite Sconosciuto',
+          balance: data.customer?.balance || 0,
+          id: data.customer?.id,
+          exists: true
+        };
+      }
+      return { exists: false };
+    } catch (err) {
+      addLog(`❌ Errore durante il recupero dei dati del Tag.`);
+      return null;
+    }
+  };
+
   // 🔍 VERIFICA UID (Tab Registrazione)
   const handleUidKeyDown = async (e) => {
     if (e.key === 'Enter') {
@@ -90,32 +116,17 @@ export default function CassaLido() {
       const uidTarget = regUid.trim();
       if (!uidTarget) return;
 
-      addLog(`🔍 Verifica integrità Tag [${uidTarget}]...`);
-      try {
-        const res = await fetch('/api/get-tag', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: uidTarget })
-        });
-        const data = await res.json();
+      const cardInfo = await fetchTagData(uidTarget, '🔍 Verifica integrità Tag');
+      if (!cardInfo) return;
 
-        if (data.success && data.exists) {
-          const cardInfo = {
-            uid: uidTarget,
-            name: data.customer?.name || 'Ospite Sconosciuto',
-            balance: data.customer?.balance || 0,
-            id: data.customer?.id
-          };
-          setScannedCard(cardInfo);
-          addLog(`⚠️ BLOCCO: Il Tag [${uidTarget}] è già assegnato a ${cardInfo.name} con €${parseFloat(cardInfo.balance).toFixed(2)}!`);
-          showToast("Tessera già occupata!", false);
-        } else {
-          setScannedCard(null);
-          addLog(`🟢 Tag [${uidTarget}] vergine. Pronto per l'assegnazione.`);
-          nameInputRef.current?.focus(); 
-        }
-      } catch (err) {
-        addLog("❌ Errore durante il controllo del Tag.");
+      if (cardInfo.exists) {
+        setScannedCard(cardInfo);
+        addLog(`⚠️ BLOCCO: Il Tag [${uidTarget}] è già assegnato a ${cardInfo.name} con €${parseFloat(cardInfo.balance).toFixed(2)}!`);
+        showToast("Tessera già occupata!", false);
+      } else {
+        setScannedCard(null);
+        addLog(`🟢 Tag [${uidTarget}] vergine. Pronto per l'assegnazione.`);
+        nameInputRef.current?.focus(); 
       }
     }
   };
@@ -128,31 +139,16 @@ export default function CassaLido() {
       if (!uidTarget) return;
 
       setTopupSuccessData(null);
-      addLog(`🔍 Lettura Saldo per il Tag [${uidTarget}]...`);
-      try {
-        const res = await fetch('/api/get-tag', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: uidTarget })
-        });
-        const data = await res.json();
+      const cardInfo = await fetchTagData(uidTarget, '🔍 Lettura Saldo per il Tag');
+      if (!cardInfo) return;
 
-        if (data.success && data.exists) {
-          const cardInfo = {
-            uid: uidTarget,
-            name: data.customer?.name || 'Ospite Sconosciuto',
-            balance: data.customer?.balance || 0,
-            id: data.customer?.id
-          };
-          setScannedCard(cardInfo);
-          addLog(`👤 Cliente trovato: ${cardInfo.name} | Saldo Attuale: €${parseFloat(cardInfo.balance).toFixed(2)}`);
-        } else {
-          setScannedCard(null);
-          addLog(`❌ ERRORE: Nessun cliente associato al Tag [${uidTarget}].`);
-          showToast("Tessera inesistente!", false);
-        }
-      } catch (err) {
-        addLog("❌ Errore lettura dati ricarica.");
+      if (cardInfo.exists) {
+        setScannedCard(cardInfo);
+        addLog(`👤 Cliente trovato: ${cardInfo.name} | Saldo Attuale: €${parseFloat(cardInfo.balance).toFixed(2)}`);
+      } else {
+        setScannedCard(null);
+        addLog(`❌ ERRORE: Nessun cliente associato al Tag [${uidTarget}].`);
+        showToast("Tessera inesistente!", false);
       }
     }
   };
@@ -165,31 +161,16 @@ export default function CassaLido() {
       if (!uidTarget) return;
 
       setPaySuccessData(null);
-      addLog(`🔍 Lettura Saldo per Pagamento Tag [${uidTarget}]...`);
-      try {
-        const res = await fetch('/api/get-tag', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: uidTarget })
-        });
-        const data = await res.json();
+      const cardInfo = await fetchTagData(uidTarget, '🔍 Lettura Saldo per Pagamento Tag');
+      if (!cardInfo) return;
 
-        if (data.success && data.exists) {
-          const cardInfo = {
-            uid: uidTarget,
-            name: data.customer?.name || 'Ospite Sconosciuto',
-            balance: data.customer?.balance || 0,
-            id: data.customer?.id
-          };
-          setScannedCard(cardInfo);
-          addLog(`🛒 Pronto al pagamento: ${cardInfo.name} | Credito: €${parseFloat(cardInfo.balance).toFixed(2)}`);
-        } else {
-          setScannedCard(null);
-          addLog(`❌ ERRORE: Impossibile pagare. Tag [${uidTarget}] non registrato.`);
-          showToast("Tessera non registrata!", false);
-        }
-      } catch (err) {
-        addLog("❌ Errore lettura dati pagamento.");
+      if (cardInfo.exists) {
+        setScannedCard(cardInfo);
+        addLog(`🛒 Pronto al pagamento: ${cardInfo.name} | Credito: €${parseFloat(cardInfo.balance).toFixed(2)}`);
+      } else {
+        setScannedCard(null);
+        addLog(`❌ ERRORE: Impossibile pagare. Tag [${uidTarget}] non registrato.`);
+        showToast("Tessera non registrata!", false);
       }
     }
   };
@@ -213,7 +194,7 @@ export default function CassaLido() {
 
       if (res.ok && data.success) {
         addLog(`✅ COMPLETATO: ${nameTarget} associato con €${initialBalance.toFixed(2)}`);
-        showToast("Tessera activated con successo!");
+        showToast("Tessera attivata con successo!");
         setRegUid(''); setRegName(''); setRegBalance('0.00');
         regInputRef.current?.focus();
       } else {
@@ -224,8 +205,8 @@ export default function CassaLido() {
     }
   };
 
-  // 🗑️ DISASSOCIAZIONE
-  const confirmDisassociation = async () => {
+  // 🗑️ DISASSOCIAZIONE CORRETTA (Senza bug dello stato asincrono)
+  const confirmDisassociation = async (method) => {
     if (role === 'operatore') {
       showToast("Azione non consentita agli operatori standard!", false);
       return;
@@ -234,14 +215,14 @@ export default function CassaLido() {
       const res = await fetch('/api/delete-tag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: scannedCard.uid, method: settlementMethod })
+        body: JSON.stringify({ uid: scannedCard.uid, method: method })
       });
       const data = await res.json();
 
       if (res.ok && data.success) {
         showToast("Tessera disassociata!");
         addLog(`🗑️ ELIMINATA: Liberato UID [${scannedCard.uid}].`);
-        setScannedCard(null); setShowDeleteModal(false); setSettlementMethod(''); setDepositReturned(false);
+        setScannedCard(null); setShowDeleteModal(false); setDepositReturned(false);
         setRegUid(''); regInputRef.current?.focus();
       }
     } catch (err) {
@@ -446,7 +427,6 @@ export default function CassaLido() {
                   <input type="number" step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-purple-600 text-lg text-center outline-none focus:border-purple-500"/>
                 </div>
                 
-                {/* 🛠️ MODIFICA: Menu Dropdown al posto dell'input di testo */}
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Causale Spesa</label>
                   <select 
@@ -456,7 +436,7 @@ export default function CassaLido() {
                   >
                     <option value="Consumazione Bar">Consumazione Bar</option>
                     <option value="Consumazione Ristorante">Consumazione Ristorante</option>
-                      <option value="Pagamento Ingresso">Pagamento Ingresso</option>
+                    <option value="Pagamento Ingresso">Pagamento Ingresso</option>
                   </select>
                 </div>
 
@@ -476,104 +456,80 @@ export default function CassaLido() {
             </section>
           )}
         </div>
-
-        {/* 📋 MONITOR LIVE LOGS COMMENTATO TEMPORANEAMENTE
-        <div style={{ backgroundColor: '#0f172a', color: '#e2e8f0' }} className="w-full p-5 rounded-3xl font-mono text-xs h-[460px] overflow-y-auto border border-slate-800 shadow-xl md:sticky md:top-8">
-          <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-3 tracking-wide uppercase text-[11px]">💾 Registro Operazioni (Log Live)</h3>
-          {logs.length === 0 ? (
-            <div className="text-slate-500 italic">In attesa di operazioni...</div>
-          ) : (
-            <div className="space-y-1.5">
-              {logs.map((log, i) => (
-                <div key={i} className="py-0.5 truncate border-b border-slate-900 last:border-0 text-slate-300">{log}</div>
-              ))}
-            </div>
-          )}
-        </div>
-        */ }
-
       </main>
 
-  {/* 🔒 WINDOW MODALE CHIUSURA TESSERA (Solo Gestore) */}
-    {showDeleteModal && role === 'gestore' && (
-      <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-        
-        {/* 🛠️ FIX RIGIDO ANTI-SOVRAPPOSIZIONE: Colore solido garantito e z-index isolato */}
-        <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-5 text-white relative z-50">
+      {/* 🔒 WINDOW MODALE CHIUSURA TESSERA (Solo Gestore) */}
+      {showDeleteModal && role === 'gestore' && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           
-          <div className="text-center space-y-1">
-            <span className="text-4xl">⚠️</span>
-            <h3 className="text-lg font-black text-white uppercase tracking-wider mt-2">Chiusura e Riconsegna</h3>
-            <p className="text-xs text-slate-400">
-              Stai per disassociare la tessera di <b className="text-sky-400">{scannedCard?.name}</b>.
-            </p>
-          </div>
-          
-          {/* Box riepilogo conti ottimizzato per Dark Mode */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2">
-            <div className="flex justify-between text-xs text-slate-300">
-              <span>Contante Residuo:</span>
-              <span className="font-bold text-white">€{parseFloat(scannedCard?.balance || 0).toFixed(2)}</span>
+          <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-5 text-white relative z-50">
+            
+            <div className="text-center space-y-1">
+              <span className="text-4xl">⚠️</span>
+              <h3 className="text-lg font-black text-white uppercase tracking-wider mt-2">Chiusura e Riconsegna</h3>
+              <p className="text-xs text-slate-400">
+                Stai per disassociare la tessera di <b className="text-sky-400">{scannedCard?.name}</b>.
+              </p>
             </div>
-            <div className="flex justify-between text-xs text-slate-300 border-b border-white/10 pb-2">
-              <span>Caparra da restituire:</span>
-              <span className="font-bold text-blue-400">+ €5.00</span>
+            
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2">
+              <div className="flex justify-between text-xs text-slate-300">
+                <span>Contante Residuo:</span>
+                <span className="font-bold text-white">€{parseFloat(scannedCard?.balance || 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-300 border-b border-white/10 pb-2">
+                <span>Caparra da restituire:</span>
+                <span className="font-bold text-blue-400">+ €5.00</span>
+              </div>
+              <div className="flex justify-between text-sm font-black text-white pt-1">
+                <span>TOTALE DA RENDERE:</span>
+                <span className="text-emerald-400 text-base font-black">
+                  €{(parseFloat(scannedCard?.balance || 0) + 5.00).toFixed(2)}
+                </span>
+              </div>
             </div>
-            <div className="flex justify-between text-sm font-black text-white pt-1">
-              <span>TOTALE DA RENDERE:</span>
-              <span className="text-emerald-400 text-base font-black">
-                €{(parseFloat(scannedCard?.balance || 0) + 5.00).toFixed(2)}
-              </span>
+
+            {scannedCard && parseFloat(scannedCard.balance) > 0 && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
+                <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Metodo di Rimborso</p>
+                <p className="text-xs text-slate-300 font-bold mt-0.5">💵 Solo Contanti (Cash Only)</p>
+              </div>
+            )}
+
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-start space-x-3">
+              <input 
+                type="checkbox" 
+                id="checkCaparra" 
+                checked={depositReturned} 
+                onChange={(e) => setDepositReturned(e.target.checked)} 
+                className="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
+              />
+              <label htmlFor="checkCaparra" className="text-[11px] text-slate-300 font-medium leading-tight cursor-pointer select-none">
+                Ho ritirato la <b className="text-white">tessera fisica</b> e confermo di aver restituito i <b className="text-blue-400">€5.00</b> di caparra al cliente.
+              </label>
             </div>
-          </div>
 
-          {/* Informativa Metodo Unico */}
-          {scannedCard && parseFloat(scannedCard.balance) > 0 && (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
-              <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Metodo di Rimborso</p>
-              <p className="text-xs text-slate-300 font-bold mt-0.5">💵 Solo Contanti (Cash Only)</p>
+            <div className="flex space-x-2 pt-1">
+              <button 
+                type="button" 
+                onClick={() => { setShowDeleteModal(false); setDepositReturned(false); }} 
+                className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 font-bold p-3 rounded-xl text-xs uppercase tracking-wider transition-colors border border-white/10"
+              >
+                Annulla
+              </button>
+              <button 
+                type="button" 
+                onClick={() => confirmDisassociation('CONTANTI')} 
+                disabled={!depositReturned} 
+                className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                💵 Rimborsa e Chiudi
+              </button>
             </div>
-          )}
 
-          {/* Box caparra riadattato per layout scuro */}
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-start space-x-3">
-            <input 
-              type="checkbox" 
-              id="checkCaparra" 
-              checked={depositReturned} 
-              onChange={(e) => setDepositReturned(e.target.checked)} 
-              className="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
-            />
-            <label htmlFor="checkCaparra" className="text-[11px] text-slate-300 font-medium leading-tight cursor-pointer select-none">
-              Ho ritirato la <b className="text-white">tessera fisica</b> e confermo di aver restituito i <b className="text-blue-400">€5.00</b> di caparra al cliente.
-            </label>
           </div>
-
-          {/* Pulsanti di Azione finale */}
-          <div className="flex space-x-2 pt-1">
-            <button 
-              type="button" 
-              onClick={() => { setShowDeleteModal(false); setSettlementMethod(''); setDepositReturned(false); }} 
-              className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 font-bold p-3 rounded-xl text-xs uppercase tracking-wider transition-colors border border-white/10"
-            >
-              Annulla
-            </button>
-            <button 
-              type="button" 
-              onClick={() => { 
-                setSettlementMethod('CONTANTI'); 
-                confirmDisassociation(); 
-              }} 
-              disabled={!depositReturned} 
-              className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed disabled:shadow-none"
-            >
-              💵 Rimborsa e Chiudi
-            </button>
-          </div>
-
         </div>
-      </div>
-    )}
+      )}
 
       {/* 🛡️ TOAST SYSTEM */}
       {toast.show && (
