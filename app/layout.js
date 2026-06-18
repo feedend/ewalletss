@@ -27,6 +27,21 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         {children}
+
+        {/* Iniezione sicura del Service Worker senza rompere il Server Component */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js')
+                    .then(function(reg) { console.log('PWA Service Worker registrato:', reg.scope); })
+                    .catch(function(err) { console.error('Errore registrazione SW:', err); });
+                });
+              }
+            `
+          }}
+        />
       </body>
     </html>
   )
