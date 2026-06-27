@@ -10,7 +10,6 @@ export default function CassaLido() {
 
   const [tab, setTab] = useState('reg');
   const [toast, setToast] = useState({ show: false, message: '', isSuccess: true });
-  const [logs, setLogs] = useState([]);
   
   // Stati di controllo tessere esistenti
   const [scannedCard, setScannedCard] = useState(null); 
@@ -73,11 +72,6 @@ export default function CassaLido() {
     router.push('/login');
   };
 
-  const addLog = (text) => {
-    const time = new Date().toLocaleTimeString();
-    setLogs((prev) => [`[${time}] ${text}`, ...prev.slice(0, 19)]);
-  };
-
   const showToast = (message, isSuccess = true) => {
     toast.show = false; // reset immediato
     setToast({ show: true, message, isSuccess });
@@ -105,8 +99,7 @@ export default function CassaLido() {
   };
 
   // 🔄 FUNZIONE CENTRALIZZATA DI LETTURA TAG
-  const fetchTagData = async (uidTarget, logPrefix) => {
-    addLog(`${logPrefix} [${uidTarget}]...`);
+  const fetchTagData = async (uidTarget) => {
     try {
       const res = await fetch('/api/get-tag', {
         method: 'POST',
@@ -126,7 +119,6 @@ export default function CassaLido() {
       }
       return { exists: false };
     } catch (err) {
-      addLog(`❌ Errore durante il recupero dei dati del Tag.`);
       return null;
     }
   };
@@ -138,16 +130,14 @@ export default function CassaLido() {
       const uidTarget = regUid.trim();
       if (!uidTarget) return;
 
-      const cardInfo = await fetchTagData(uidTarget, '🔍 Verifica integrità Tag');
+      const cardInfo = await fetchTagData(uidTarget);
       if (!cardInfo) return;
 
       if (cardInfo.exists) {
         setScannedCard(cardInfo);
-        addLog(`⚠️ BLOCCO: Il Tag [${uidTarget}] è già assegnato a ${cardInfo.name} con €${parseFloat(cardInfo.balance).toFixed(2)}!`);
         showToast("Tessera già occupata!", false);
       } else {
         setScannedCard(null);
-        addLog(`🟢 Tag [${uidTarget}] vergine. Pronto per l'assegnazione.`);
         nameInputRef.current?.focus(); 
       }
     }
@@ -161,15 +151,13 @@ export default function CassaLido() {
       if (!uidTarget) return;
 
       setTopupSuccessData(null);
-      const cardInfo = await fetchTagData(uidTarget, '🔍 Lettura Saldo per il Tag');
+      const cardInfo = await fetchTagData(uidTarget);
       if (!cardInfo) return;
 
       if (cardInfo.exists) {
         setScannedCard(cardInfo);
-        addLog(`👤 Cliente trovato: ${cardInfo.name} | Saldo Attuale: €${parseFloat(cardInfo.balance).toFixed(2)}`);
       } else {
         setScannedCard(null);
-        addLog(`❌ ERRORE: Nessun cliente associato al Tag [${uidTarget}].`);
         showToast("Tessera inesistente!", false);
       }
     }
@@ -183,15 +171,13 @@ export default function CassaLido() {
       if (!uidTarget) return;
 
       setPaySuccessData(null);
-      const cardInfo = await fetchTagData(uidTarget, '🔍 Lettura Saldo per Pagamento Tag');
+      const cardInfo = await fetchTagData(uidTarget);
       if (!cardInfo) return;
 
       if (cardInfo.exists) {
         setScannedCard(cardInfo);
-        addLog(`🛒 Pronto al pagamento: ${cardInfo.name} | Credito: €${parseFloat(cardInfo.balance).toFixed(2)}`);
       } else {
         setScannedCard(null);
-        addLog(`❌ ERRORE: Impossibile pagare. Tag [${uidTarget}] non registrato.`);
         showToast("Tessera non registrata!", false);
       }
     }
@@ -220,7 +206,6 @@ export default function CassaLido() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        addLog(`✅ COMPLETATO: ${nameTarget} associato con €${initialBalance.toFixed(2)}`);
         showToast("Tessera attivata con successo!");
         setRegUid(''); setRegName(''); setRegBalance('0.00');
         regInputRef.current?.focus();
@@ -248,7 +233,6 @@ export default function CassaLido() {
 
       if (res.ok && data.success) {
         showToast("Tessera disassociata!");
-        addLog(`🗑️ ELIMINATA: Liberato UID [${scannedCard.uid}].`);
         setScannedCard(null); setShowDeleteModal(false); setDepositReturned(false);
         setRegUid(''); regInputRef.current?.focus();
       }
@@ -361,7 +345,6 @@ export default function CassaLido() {
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-5">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">1. UID Carta (Passa sul lettore)</label>
-                {/* inputMode="none" evita l'apertura tastiera per lettore hardware */}
                 <input ref={regInputRef} type="text" maxLength={10} value={regUid} inputMode="none" onChange={(e) => setRegUid(e.target.value)} onKeyDown={handleUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-blue-500"/>
               </div>
 
@@ -379,7 +362,6 @@ export default function CassaLido() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Blocco Input Nome Unito: segue la tastiera in modo fluido */}
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">2. Nome Ospite / Ombrellone (Testo Libero)</label>
@@ -496,14 +478,6 @@ export default function CassaLido() {
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Costo Consumazione (€)</label>
                   <input type="text" value={payAmount} inputMode="none" readOnly placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-purple-600 text-2xl text-center outline-none"/>
                 </div>
-
-                {/* Listino Rapido Bar */}
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => setPayAmount("1.50")} className="bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold py-2 rounded-xl active:scale-95 transition-all">☕ Caffè (1.50€)</button>
-                  <button type="button" onClick={() => setPayAmount("3.50")} className="bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold py-2 rounded-xl active:scale-95 transition-all">🥤 Bibita (3.50€)</button>
-                  <button type="button" onClick={() => setPayAmount("6.00")} className="bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold py-2 rounded-xl active:scale-95 transition-all">🍺 Birra (6.00€)</button>
-                  <button type="button" onClick={() => setPayAmount("12.00")} className="bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold py-2 rounded-xl active:scale-95 transition-all">🍹 Cocktail (12.00€)</button>
-                </div>
                 
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Causale Spesa</label>
@@ -613,13 +587,6 @@ export default function CassaLido() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* 🛡️ TOAST SYSTEM */}
-      {toast.show && (
-        <div style={{ backgroundColor: toast.isSuccess ? '#10b981' : '#ef4444', borderColor: toast.isSuccess ? '#059669' : '#dc2626', color: '#ffffff' }} className="fixed bottom-6 right-6 px-6 py-4 rounded-2xl shadow-2xl font-bold flex items-center space-x-3 z-50 max-w-sm border">
-          <span className="text-xl">{toast.isSuccess ? '🎉' : '⚠️'}</span><span className="text-sm font-bold tracking-wide text-white">{toast.message}</span>
         </div>
       )}
     </div>
