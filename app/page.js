@@ -11,6 +11,9 @@ export default function CassaLido() {
   const [tab, setTab] = useState('reg');
   const [toast, setToast] = useState({ show: false, message: '', isSuccess: true });
   
+  // Timer di riferimento per ripulire i toast precedenti
+  const toastTimeoutRef = useRef(null);
+
   // Stati di controllo tessere esistenti
   const [scannedCard, setScannedCard] = useState(null); 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -50,6 +53,11 @@ export default function CassaLido() {
         setTab('reg');
       }
     }
+
+    // Cleanup del timer del toast se il componente si smonta
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
   }, [router]);
 
   // Gestione focus dei tab e reset stati temporanei
@@ -72,10 +80,15 @@ export default function CassaLido() {
     router.push('/login');
   };
 
+  // Fix: Evitata la mutazione diretta ed aggiunto il reset del timeout precedente
   const showToast = (message, isSuccess = true) => {
-    toast.show = false; // reset immediato
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    
     setToast({ show: true, message, isSuccess });
-    setTimeout(() => setToast({ show: false, message: '', isSuccess: true }), 4500);
+    
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast({ show: false, message: '', isSuccess: true });
+    }, 4500);
   };
 
   // 📱 GESTORE TASTIERINO VIRTUALE CENTRALIZZATO
@@ -113,13 +126,42 @@ export default function CassaLido() {
           uid: uidTarget,
           name: data.customer?.name || 'Ospite Sconosciuto',
           balance: data.customer?.balance || 0,
-          id: data.customer?.id,
+          id: data.customer?.id, 
           exists: true
         };
       }
       return { exists: false };
     } catch (err) {
       return null;
+    }
+  };
+
+  // 🔥 FUNZIONE DI STAMPA QR NATURALE PER RAWBT (58mm)
+  const printWelcomeQR = async (uid, customerName, customerDbId) => {
+    try {
+      const urlAreaPrivata = `${window.location.origin}/lido/profilo?uid=${uid}&id=${customerDbId}`;
+
+      const datiStampa = [
+        "[C]<b>LIDO CASHLESS</b>\n",
+        "[C]Benvenuto in Spiaggia!\n",
+        "--------------------------------\n",
+        `Cliente: <b>${customerName}</b>\n`,
+        `Tessera ID: ${uid}\n`,
+        "--------------------------------\n",
+        "[C]Scansiona questo QR per vedere\nil tuo saldo e i tuoi movimenti\nin tempo reale sotto l'ombrellone:\n\n",
+        `[C][QR size=6]${urlAreaPrivata}\n\n`, 
+        "[C]Valido solo per la durata del soggiorno\n",
+        "\n\n\n"
+      ].join("");
+
+      await fetch('http://localhost:40213/print', {
+        method: 'POST',
+        headers: { 'text/plain' : 'text/plain' },
+        body: datiStampa
+      });
+    } catch (err) {
+      console.error("Errore di stampa:", err);
+      showToast("Tessera attiva, ma accendi la stampante!", false);
     }
   };
 
@@ -207,6 +249,9 @@ export default function CassaLido() {
 
       if (res.ok && data.success) {
         showToast("Tessera attivata con successo!");
+        const dbId = data.id || data.customerId || Date.now(); 
+        printWelcomeQR(uidTarget, nameTarget, dbId);
+
         setRegUid(''); setRegName(''); setRegBalance('0.00');
         regInputRef.current?.focus();
       } else {
@@ -217,10 +262,9 @@ export default function CassaLido() {
     }
   };
 
-  // 🗑️ DISASSOCIAZIONE CORRETTA
   const confirmDisassociation = async (method) => {
     if (role === 'operatore') {
-      showToast("Azione non consentita agli operatori standard!", false);
+      showToast("AZIONE NON CONSENTITA", false);
       return;
     }
     try {
@@ -230,22 +274,16 @@ export default function CassaLido() {
         body: JSON.stringify({ uid: scannedCard.uid, method: method })
       });
       const data = await res.json();
-
       if (res.ok && data.success) {
         showToast("Tessera disassociata!");
         setScannedCard(null); setShowDeleteModal(false); setDepositReturned(false);
         setRegUid(''); regInputRef.current?.focus();
       }
-    } catch (err) {
-      showToast("Errore eliminazione", false);
-    }
+    } catch (err) { showToast("Errore eliminazione", false); }
   };
 
-  // 💰 RICARICA SALDO
   const handleTopup = async (e) => {
-    if (e) e.preventDefault();
-    if (!scannedCard) return;
-
+    if (e) e.preventDefault(); if (!scannedCard) return;
     try {
       const res = await fetch('/api/topup', {
         method: 'POST',
@@ -254,34 +292,17 @@ export default function CassaLido() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setTopupSuccessData({
-          name: scannedCard.name,
-          oldBalance: parseFloat(scannedCard.balance),
-          added: parseFloat(topupAmount) || 0,
-          newBalance: parseFloat(data.new_balance)
-        });
-        showToast(`Ricarica eseguita!`);
-        setTopupUid(''); setTopupAmount(''); setScannedCard(null);
-        topupInputRef.current?.focus();
+        setTopupSuccessData({ name: scannedCard.name, oldBalance: parseFloat(scannedCard.balance), added: parseFloat(topupAmount) || 0, newBalance: parseFloat(data.new_balance) });
+        showToast(`Ricarica eseguita!`); setTopupUid(''); setTopupAmount(''); setScannedCard(null); topupInputRef.current?.focus();
       }
-    } catch (err) {
-      showToast("Errore ricarica", false);
-    }
+    } catch (err) { showToast("Errore ricarica", false); }
   };
 
-  // 🛒 PAGAMENTO
   const handlePayment = async (e) => {
-    if (e) e.preventDefault();
-    if (!scannedCard) return;
-
+    if (e) e.preventDefault(); if (!scannedCard) return;
     const currentBalance = parseFloat(scannedCard.balance);
     const chargeAmount = parseFloat(payAmount) || 0;
-
-    if (chargeAmount > currentBalance) {
-      showToast("Credito Insufficiente!", false);
-      return;
-    }
-
+    if (chargeAmount > currentBalance) { showToast("Credito Insufficiente!", false); return; }
     try {
       const res = await fetch('/api/pay', {
         method: 'POST',
@@ -290,19 +311,10 @@ export default function CassaLido() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setPaySuccessData({
-          name: scannedCard.name,
-          oldBalance: currentBalance,
-          charged: chargeAmount,
-          newBalance: parseFloat(data.new_balance)
-        });
-        showToast(`Pagamento addebitato!`);
-        setPayUid(''); setPayAmount(''); setScannedCard(null);
-        payInputRef.current?.focus();
+        setPaySuccessData({ name: scannedCard.name, oldBalance: currentBalance, charged: chargeAmount, newBalance: parseFloat(data.new_balance) });
+        showToast(`Pagamento addebitato!`); setPayUid(''); setPayAmount(''); setScannedCard(null); payInputRef.current?.focus();
       }
-    } catch (err) {
-      showToast("Errore di invio pagamento", false);
-    }
+    } catch (err) { showToast("Errore di invio pagamento", false); }
   };
 
   if (!role) {
@@ -314,11 +326,8 @@ export default function CassaLido() {
       <nav className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 text-white p-4 shadow-lg">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <h1 className="text-lg font-black tracking-wider uppercase">Lido Cassa Cashless <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full lowercase">v4.0-pos</span></h1>
-          
           <div className="flex items-center space-x-4">
-            <span className="text-xs font-bold bg-black/20 px-3 py-1.5 rounded-xl border border-white/10">
-              👤 {username.toUpperCase()} (<span className="text-amber-300 font-black">{role}</span>)
-            </span>
+            <span className="text-xs font-bold bg-black/20 px-3 py-1.5 rounded-xl border border-white/10">👤 {username.toUpperCase()} (<span className="text-amber-300 font-black">{role}</span>)</span>
             <button onClick={handleLogout} className="text-xs font-black bg-rose-600/80 hover:bg-rose-600 px-3 py-1.5 rounded-xl transition-all uppercase tracking-wider">Esci</button>
           </div>
         </div>
@@ -326,8 +335,6 @@ export default function CassaLido() {
 
       <main className="max-w-2xl mx-auto px-4 py-6 grid grid-cols-1 gap-6 items-start">
         <div className="space-y-6">
-          
-          {/* Selettore Tab */}
           <div className="bg-slate-200/70 p-1.5 rounded-2xl flex space-x-1 shadow-inner">
             {(role === 'gestore' || role === 'operatore') && (
               <>
@@ -340,7 +347,7 @@ export default function CassaLido() {
             )}
           </div>
 
-          {/* 📋 TAB REGISTRAZIONE */}
+          {/* TAB REGISTRAZIONE */}
           {tab === 'reg' && (role === 'gestore' || role === 'operatore') && (
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-5">
               <div>
@@ -353,7 +360,6 @@ export default function CassaLido() {
                   <span className="text-3xl">🛑</span>
                   <h3 className="text-sm font-black text-rose-900 uppercase">Tessera Già Occupata!</h3>
                   <p className="text-xs text-rose-700">Legata a: <b>{scannedCard.name}</b> Saldo: <b>€{parseFloat(scannedCard.balance).toFixed(2)}</b>.</p>
-                  
                   {role === 'gestore' ? (
                     <button type="button" onClick={() => setShowDeleteModal(true)} className="w-full bg-rose-600 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md hover:bg-rose-700 transition-colors">🗑️ Disassocia ed Elimina Cliente</button>
                   ) : (
@@ -367,34 +373,24 @@ export default function CassaLido() {
                       <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">2. Nome Ospite / Ombrellone (Testo Libero)</label>
                       <input ref={nameInputRef} type="text" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="Es. Mario Rossi / Ombrellone 15" className="w-full p-3.5 bg-white border-2 border-slate-200 rounded-xl outline-none focus:border-blue-500 font-bold"/>
                     </div>
-                    
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">3. Carico Denaro Iniziale (€)</label>
                       <input type="text" value={regBalance} inputMode="none" readOnly className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl font-black text-blue-600 text-xl text-center outline-none"/>
                     </div>
                   </div>
 
-                  {/* Tastierino Virtuale per Carico Iniziale */}
                   <div className="bg-slate-100/80 p-3 grid grid-cols-3 gap-2 rounded-2xl border border-slate-200/60">
                     {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'].map((key) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => handleVirtualKeypad(key, regBalance, setRegBalance)}
-                        className={`py-3.5 text-lg font-black rounded-xl border transition-all active:scale-95 ${key === '⌫' ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-800 border-slate-200 shadow-sm'}`}
-                      >
-                        {key}
-                      </button>
+                      <button key={key} type="button" onClick={() => handleVirtualKeypad(key, regBalance, setRegBalance)} className={`py-3.5 text-lg font-black rounded-xl border transition-all active:scale-95 ${key === '⌫' ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-800 border-slate-200 shadow-sm'}`}>{key}</button>
                     ))}
                   </div>
-
                   <button type="button" onClick={() => handleRegister()} disabled={!regUid || !regName.trim()} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 disabled:opacity-30 disabled:pointer-events-none text-white font-bold p-4 rounded-xl text-sm uppercase tracking-wider shadow-md active:scale-[0.98] transition-all">🚀 Attiva Nuova Tessera</button>
                 </div>
               )}
             </section>
           )}
 
-          {/* 💰 TAB RICARICA */}
+          {/* TAB RICARICA */}
           {tab === 'topup' && (role === 'gestore' || role === 'operatore') && (
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-5">
               <div>
@@ -420,28 +416,16 @@ export default function CassaLido() {
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Importo Cash da Aggiungere (€)</label>
                   <input type="text" value={topupAmount} inputMode="none" readOnly placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-emerald-600 text-2xl text-center outline-none"/>
                 </div>
-
-                {/* Tagli Rapidi per Velocizzare le Ricariche */}
                 <div className="grid grid-cols-4 gap-2">
                   {['10', '20', '50', '100'].map(val => (
                     <button key={val} type="button" onClick={() => setTopupAmount(val)} className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-black py-2.5 rounded-xl text-xs active:scale-95 transition-all">+{val}€</button>
                   ))}
                 </div>
-
-                {/* Tastierino Fisso Ricarica */}
                 <div className="bg-slate-100/80 p-3 grid grid-cols-3 gap-2 rounded-2xl border border-slate-200/60">
                   {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'].map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => handleVirtualKeypad(key, topupAmount, setTopupAmount)}
-                      className={`py-3.5 text-lg font-black rounded-xl border transition-all active:scale-95 ${key === '⌫' ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-800 border-slate-200 shadow-sm'}`}
-                    >
-                      {key}
-                    </button>
+                    <button key={key} type="button" onClick={() => handleVirtualKeypad(key, topupAmount, setTopupAmount)} className={`py-3.5 text-lg font-black rounded-xl border transition-all active:scale-95 ${key === '⌫' ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-800 border-slate-200 shadow-sm'}`}>{key}</button>
                   ))}
                 </div>
-
                 <button type="button" onClick={() => handleTopup()} disabled={!scannedCard || !topupAmount || parseFloat(topupAmount) <= 0} className={`w-full font-bold p-4 rounded-xl text-sm uppercase tracking-wider shadow-md transition-all active:scale-[0.98] ${scannedCard && parseFloat(topupAmount) > 0 ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'}`}>💰 Conferma ed Incassa</button>
               </div>
 
@@ -458,7 +442,7 @@ export default function CassaLido() {
             </section>
           )}
 
-          {/* 🛒 TAB PAGAMENTO */}
+          {/* TAB PAGAMENTO */}
           {tab === 'pay' && (role === 'gestore' || role === 'bar') && (
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
               <div>
@@ -478,34 +462,20 @@ export default function CassaLido() {
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Costo Consumazione (€)</label>
                   <input type="text" value={payAmount} inputMode="none" readOnly placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-purple-600 text-2xl text-center outline-none"/>
                 </div>
-                
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Causale Spesa</label>
-                  <select 
-                    value={payDescription} 
-                    onChange={(e) => setPayDescription(e.target.value)} 
-                    className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-semibold text-slate-800 bg-white outline-none focus:border-purple-500"
-                  >
+                  <select value={payDescription} onChange={(e) => setPayDescription(e.target.value)} className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-semibold text-slate-800 bg-white outline-none focus:border-purple-500">
                     <option value="Consumazione Bar">Consumazione Bar</option>
                     <option value="Consumazione Ristorante">Consumazione Ristorante</option>
                     <option value="Pagamento Ingresso">Pagamento Ingresso</option>
                   </select>
                 </div>
 
-                {/* Tastierino Fisso Pagamento */}
                 <div className="bg-slate-100/80 p-3 grid grid-cols-3 gap-2 rounded-2xl border border-slate-200/60">
                   {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'].map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => handleVirtualKeypad(key, payAmount, setPayAmount)}
-                      className={`py-3.5 text-lg font-black rounded-xl border transition-all active:scale-95 ${key === '⌫' ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-800 border-slate-200 shadow-sm'}`}
-                    >
-                      {key}
-                    </button>
+                    <button key={key} type="button" onClick={() => handleVirtualKeypad(key, payAmount, setPayAmount)} className={`py-3.5 text-lg font-black rounded-xl border transition-all active:scale-95 ${key === '⌫' ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-800 border-slate-200 shadow-sm'}`}>{key}</button>
                   ))}
                 </div>
-
                 <button type="button" onClick={() => handlePayment()} disabled={!scannedCard || !payAmount || parseFloat(payAmount) <= 0} className={`w-full font-bold p-4 rounded-xl text-sm uppercase tracking-wider shadow-md transition-all active:scale-[0.98] ${scannedCard && parseFloat(payAmount) > 0 ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'}`}>🛒 Conferma Addebito</button>
               </div>
 
@@ -524,7 +494,7 @@ export default function CassaLido() {
         </div>
       </main>
 
-      {/* 🔒 WINDOW MODALE CHIUSURA TESSERA (Solo Gestore) */}
+      {/* WINDOW MODALE CHIUSURA TESSERA */}
       {showDeleteModal && role === 'gestore' && (
         <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-5 text-white relative z-50">
@@ -557,36 +527,29 @@ export default function CassaLido() {
             )}
 
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-start space-x-3">
-              <input 
-                type="checkbox" 
-                id="checkCaparra" 
-                checked={depositReturned} 
-                onChange={(e) => setDepositReturned(e.target.checked)} 
-                className="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
-              />
+              <input type="checkbox" id="checkCaparra" checked={depositReturned} onChange={(e) => setDepositReturned(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-white/20 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer" />
               <label htmlFor="checkCaparra" className="text-[11px] text-slate-300 font-medium leading-tight cursor-pointer select-none">
                 Ho ritirato la <b className="text-white">tessera fisica</b> e confermo di aver restituito i <b className="text-blue-400">€5.00</b> di caparra ed il Credito Residuo al cliente.
               </label>
             </div>
 
             <div className="flex space-x-2 pt-1">
-              <button 
-                type="button" 
-                onClick={() => { setShowDeleteModal(false); setDepositReturned(false); }} 
-                className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 font-bold p-3 rounded-xl text-xs uppercase tracking-wider transition-colors border border-white/10"
-              >
-                Annulla
-              </button>
-              <button 
-                type="button" 
-                onClick={() => confirmDisassociation('CONTANTI')} 
-                disabled={!depositReturned} 
-                className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed disabled:shadow-none"
-              >
-                💵 Rimborsa e Chiudi
-              </button>
+              <button type="button" onClick={() => { setShowDeleteModal(false); setDepositReturned(false); }} className="flex-1 bg-white/5 hover:bg-white/10 text-slate-300 font-bold p-3 rounded-xl text-xs uppercase tracking-wider transition-colors border border-white/10">Annulla</button>
+              <button type="button" onClick={() => confirmDisassociation('CONTANTI')} disabled={!depositReturned} className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed disabled:shadow-none">💵 Rimborsa e Chiudi</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 🔥 FIX: COMPONENTE TOAST INIETTATO E COMPILATO NEL DOM */}
+      {toast.show && (
+        <div className={`fixed bottom-5 right-5 z-50 flex items-center p-4 rounded-2xl shadow-2xl border text-xs font-black uppercase tracking-wider transition-all duration-300 transform translate-y-0 ${
+          toast.isSuccess 
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+            : 'bg-rose-50 border-rose-200 text-rose-800'
+        }`}>
+          <span className="mr-2 text-sm">{toast.isSuccess ? '✅' : '🛑'}</span>
+          <span>{toast.message}</span>
         </div>
       )}
     </div>
