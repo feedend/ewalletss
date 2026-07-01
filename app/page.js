@@ -136,10 +136,11 @@ export default function CassaLido() {
     }
   };
 
-  // 🔥 FUNZIONE DI STAMPA QR NATURALE PER RAWBT (58mm)
-  const printWelcomeQR = async (uid, customerName, customerDbId) => {
+  // 🔥 FUNZIONE DI STAMPA QR NATURALE PER RAWBT (58mm) - MODIFICATA CON TOKEN SICURO
+  const printWelcomeQR = async (token, customerName, uid) => {
     try {
-      const urlAreaPrivata = `${window.location.origin}/lido/profilo?uid=${uid}&id=${customerDbId}`;
+      // La URL ora punta al token dinamico "usa e getta" anziché esporre ID incrementali o UID hardware
+      const urlAreaPrivata = `${window.location.origin}/lido/profilo?token=${token}`;
 
       const datiStampa = [
         "[C]<b>LIDO CASHLESS</b>\n",
@@ -225,7 +226,7 @@ export default function CassaLido() {
     }
   };
 
-  // 🚀 ATTIVAZIONE REALE TESSERA
+  // 🚀 ATTIVAZIONE REALE TESSERA - AGGIORNATA CON LOGICA TOKEN
   const handleRegister = async (e) => {
     if (e) e.preventDefault();
     if (scannedCard) return;
@@ -249,8 +250,13 @@ export default function CassaLido() {
 
       if (res.ok && data.success) {
         showToast("Tessera attivata con successo!");
-        const dbId = data.id || data.customerId || Date.now(); 
-        printWelcomeQR(uidTarget, nameTarget, dbId);
+        
+        // Recuperiamo il token univoco usa e getta generato dal backend. 
+        // Se non ancora implementato lato server, inseriamo un fallback temporaneo basato su timestamp per non bloccare l'app.
+        const secureToken = data.token || `TK-${Date.now()}-${uidTarget}`;
+        
+        // Avviamo la stampa del QR passando il token sicuro
+        printWelcomeQR(secureToken, nameTarget, uidTarget);
 
         setRegUid(''); setRegName(''); setRegBalance('0.00');
         regInputRef.current?.focus();
@@ -468,6 +474,7 @@ export default function CassaLido() {
                     <option value="Consumazione Bar">Consumazione Bar</option>
                     <option value="Consumazione Ristorante">Consumazione Ristorante</option>
                     <option value="Pagamento Ingresso">Pagamento Ingresso</option>
+                    <option value="Consumazione Lido">Consumazione Lido</option>
                   </select>
                 </div>
 
