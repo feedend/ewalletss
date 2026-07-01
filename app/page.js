@@ -136,36 +136,6 @@ export default function CassaLido() {
     }
   };
 
-  // 🔥 FUNZIONE DI STAMPA QR NATURALE PER RAWBT (58mm) - MODIFICATA CON TOKEN SICURO
-  const printWelcomeQR = async (token, customerName, uid) => {
-    try {
-      // La URL ora punta al token dinamico "usa e getta" anziché esporre ID incrementali o UID hardware
-      const urlAreaPrivata = `${window.location.origin}/lido/profilo?token=${token}`;
-
-      const datiStampa = [
-        "[C]<b>LIDO CASHLESS</b>\n",
-        "[C]Benvenuto in Spiaggia!\n",
-        "--------------------------------\n",
-        `Cliente: <b>${customerName}</b>\n`,
-        `Tessera ID: ${uid}\n`,
-        "--------------------------------\n",
-        "[C]Scansiona questo QR per vedere\nil tuo saldo e i tuoi movimenti\nin tempo reale sotto l'ombrellone:\n\n",
-        `[C][QR size=6]${urlAreaPrivata}\n\n`, 
-        "[C]Valido solo per la durata del soggiorno\n",
-        "\n\n\n"
-      ].join("");
-
-      await fetch('http://localhost:40213/print', {
-        method: 'POST',
-        headers: { 'text/plain' : 'text/plain' },
-        body: datiStampa
-      });
-    } catch (err) {
-      console.error("Errore di stampa:", err);
-      showToast("Tessera attiva, ma accendi la stampante!", false);
-    }
-  };
-
   // 🔍 VERIFICA UID (Tab Registrazione)
   const handleUidKeyDown = async (e) => {
     if (e.key === 'Enter') {
@@ -226,7 +196,7 @@ export default function CassaLido() {
     }
   };
 
-  // 🚀 ATTIVAZIONE REALE TESSERA - AGGIORNATA CON LOGICA TOKEN
+  // 🚀 ATTIVAZIONE REALE TESSERA
   const handleRegister = async (e) => {
     if (e) e.preventDefault();
     if (scannedCard) return;
@@ -250,13 +220,6 @@ export default function CassaLido() {
 
       if (res.ok && data.success) {
         showToast("Tessera attivata con successo!");
-        
-        // Recuperiamo il token univoco usa e getta generato dal backend. 
-        // Se non ancora implementato lato server, inseriamo un fallback temporaneo basato su timestamp per non bloccare l'app.
-        const secureToken = data.token || `TK-${Date.now()}-${uidTarget}`;
-        
-        // Avviamo la stampa del QR passando il token sicuro
-        printWelcomeQR(secureToken, nameTarget, uidTarget);
 
         setRegUid(''); setRegName(''); setRegBalance('0.00');
         regInputRef.current?.focus();
@@ -474,7 +437,6 @@ export default function CassaLido() {
                     <option value="Consumazione Bar">Consumazione Bar</option>
                     <option value="Consumazione Ristorante">Consumazione Ristorante</option>
                     <option value="Pagamento Ingresso">Pagamento Ingresso</option>
-                    <option value="Consumazione Lido">Consumazione Lido</option>
                   </select>
                 </div>
 
