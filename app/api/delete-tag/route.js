@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// 🛑 FONDAMENTALE: Forza Vercel a eseguire il codice sul DB ogni volta, senza usare la cache
 export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
@@ -14,17 +13,14 @@ export async function POST(request) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-    // Legge i dati inviati dal modulo di chiusura cassa
     const body = await request.json().catch(() => ({}));
-    const { uid, method } = body; // 'method' indica il metodo di rimborso (es. 'CONTANTI')
+    const { uid, method } = body; 
 
     if (!uid) {
       return NextResponse.json({ success: false, error: 'UID tessera mancante' }, { status: 400 });
     }
 
-    // 1. RECUPERO INFO ASSOCIAZIONE
-    // Troviamo il customer_id legato alla tessera prima di cancellare il record o modificarlo
+    // 1. RECUPERO INFO TESSERA
     const { data: tagData, error: tagFetchError } = await supabase
       .from('nfc_tags')
       .select('customer_id')
@@ -39,41 +35,38 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'Tessera non trovata nel database' }, { status: 404 });
     }
 
-    // 2. RESET E DISASSOCIAZIONE DELLA TESSERA FISICA
-    // Impostiamo il token a null (il vecchio QR muore qui), azzeriamo il cliente e cambiamo lo stato
+    // 2. DISATTIVAZIONE TOKEN E HARDWARE
+    // customer_id è NOT NULL, quindi lo lasciamo invariato. Cambiamo lo status e uccidiamo il token.
     const { error: tagUpdateError } = await supabase
       .from('nfc_tags')
       .update({
-        customer_id: null,
-        token: null,       // 👈 Il vecchio QR stampato smette istantaneamente di funzionare!
-        status: 'inactive' // Torna disponibile per essere riassociata a un nuovo ospite
+        token: null,       // Il QR code smette di funzionare all'istante
+        status: 'inactive' // La tessera è pronta per essere riciclata
       })
       .eq('uid', uid.trim());
 
     if (tagUpdateError) {
-      return NextResponse.json({ success: false, error: `Errore disassociazione hardware: ${tagUpdateError.message}` }, { status: 500 });
+      return NextResponse.json({ success: false, error: `Errore disattivazione tag: ${tagUpdateError.message}` }, { status: 500 });
     }
 
-    // 3. ELIMINAZIONE CLIENTE / SVUOTAMENTO ANAGRAFICA
-    // Se la tessera era legata a un cliente valido, puliamo la tabella customers
+    // 3. SOFT-DELETE DEL CLIENTE (Preserva lo storico delle transazioni)
     if (tagData.customer_id) {
-      const { error: customerDeleteError } = await supabase
+      const { error: customerUpdateError } = await supabase
         .from('customers')
-        .delete()
+        .update({
+          is_active: false, // Il cliente non è più attivo nel lido
+          balance: 0.00     // Il saldo viene azzerato (rimborsato)
+        })
         .eq('id', tagData.customer_id);
 
-      if (customerDeleteError) {
-        // 💡 NOTA DI BACKEND: Se hai una tabella 'transactions' legata a 'customers' tramite Foreign Key,
-        // questa eliminazione fallirà a meno che tu non abbia impostato il vincolo su "ON DELETE CASCADE".
-        // Registriamo l'errore in console ma non blocchiamo la risposta, poiché la tessera è già stata liberata.
-        console.error("Nota: Impossibile eliminare l'anagrafica cliente, probabilmente ha transazioni collegate storiche:", customerDeleteError.message);
+      if (customerUpdateError) {
+        return NextResponse.json({ success: false, error: `Errore disattivazione cliente: ${customerUpdateError.message}` }, { status: 500 });
       }
     }
 
-    // 4. RISPOSTA DI SUCCESSO
     return NextResponse.json({
       success: true,
-      message: `Tessera ${uid} liberata con successo. Rimborso registrato via ${method || 'CONTANTI'}.`
+      message: `Tessera ${uid} disattivata con successo. Rimborso eseguito via ${method || 'CONTANTI'}. Storico preservato.`
     });
 
   } catch (err) {
