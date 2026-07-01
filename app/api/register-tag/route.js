@@ -16,33 +16,41 @@ export async function POST(request) {
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
     
     // Legge i dati inviati dalla cassa
-   const body = await request.json().catch(() => ({}));
-const { uid, name, balance } = body; // 👈 Aggiungi 'balance' qui
-const initialBalance = parseFloat(balance) || 0; // 👈 Converte in numero
+    const body = await request.json().catch(() => ({}));
+    const { uid, name, balance } = body;
+    const initialBalance = parseFloat(balance) || 0;
 
-// ... controlli ...
+    // Controlli preliminari sui dati obbligatori
+    if (!uid || !name) {
+      return NextResponse.json({ success: false, error: 'UID e Nome sono obbligatori' }, { status: 400 });
+    }
 
-// Modifica l'insert del cliente così:
-const { data: customerData, error: customerError } = await supabase
-  .from('customers')
-  .insert({ 
-    name: name.trim(),
-    balance: initialBalance // 👈 SALVA IL SALDO INIZIALE NEL DB!
-  })
-  .select()
-  .single();
+    // 1. CREAZIONE CLIENTE
+    const { data: customerData, error: customerError } = await supabase
+      .from('customers')
+      .insert({ 
+        name: name.trim(),
+        balance: initialBalance // SALVA IL SALDO INIZIALE NEL DB!
+      })
+      .select()
+      .single();
 
     if (customerError) {
       return NextResponse.json({ success: false, error: `Errore creazione cliente: ${customerError.message}` }, { status: 500 });
     }
 
-    // 3. ASSOCIAZIONE TESSERA (Usa l'ID del cliente appena creato)
+    // 2. GENERAZIONE TOKEN SECURE "USA E GETTA"
+    // crypto.randomUUID() genera una stringa casuale unica del tipo: "123e4567-e89b-12d3-a456-426614174000"
+    const secureToken = crypto.randomUUID();
+
+    // 3. ASSOCIAZIONE TESSERA (Usa l'ID del cliente e salva il token)
     const { error: tagError } = await supabase
       .from('nfc_tags')
       .insert({
         uid: uid.trim(),
         customer_id: customerData.id,
-        status: 'active'
+        status: 'active',
+        token: secureToken // 👈 SALVA IL TOKEN USA E GETTA NEL DB!
       });
 
     if (tagError) {
@@ -55,10 +63,11 @@ const { data: customerData, error: customerError } = await supabase
       return NextResponse.json({ success: false, error: `Errore associazione tag: ${tagError.message}` }, { status: 500 });
     }
 
-    // Risposta reale di successo
+    // 4. RISPOSTA DI SUCCESSO
     return NextResponse.json({
       success: true,
       message: 'Cliente e Tessera registrati correttamente sul database!',
+      token: secureToken, // 👈 RESTITUISCE IL TOKEN AL FRONTEND PER IL QR CODE!
       customer: {
         id: customerData.id,
         name: customerData.name,
