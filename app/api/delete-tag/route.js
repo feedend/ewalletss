@@ -14,65 +14,66 @@ export async function POST(request) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    
-    // Legge i dati inviati dalla cassa
+
+    // Legge i dati inviati dal modulo di chiusura cassa
     const body = await request.json().catch(() => ({}));
-    const { uid, name, balance } = body;
-    const initialBalance = parseFloat(balance) || 0;
+    const { uid, method } = body; // 'method' indica il metodo di rimborso (es. 'CONTANTI')
 
-    // Controlli preliminari sui dati obbligatori
-    if (!uid || !name) {
-      return NextResponse.json({ success: false, error: 'UID e Nome sono obbligatori' }, { status: 400 });
+    if (!uid) {
+      return NextResponse.json({ success: false, error: 'UID tessera mancante' }, { status: 400 });
     }
 
-    // 1. CREAZIONE CLIENTE
-    const { data: customerData, error: customerError } = await supabase
-      .from('customers')
-      .insert({ 
-        name: name.trim(),
-        balance: initialBalance // SALVA IL SALDO INIZIALE NEL DB!
-      })
-      .select()
-      .single();
-
-    if (customerError) {
-      return NextResponse.json({ success: false, error: `Errore creazione cliente: ${customerError.message}` }, { status: 500 });
-    }
-
-    // 2. GENERAZIONE TOKEN SECURE "USA E GETTA"
-    // crypto.randomUUID() genera una stringa casuale unica del tipo: "123e4567-e89b-12d3-a456-426614174000"
-    const secureToken = crypto.randomUUID();
-
-    // 3. ASSOCIAZIONE TESSERA (Usa l'ID del cliente e salva il token)
-    const { error: tagError } = await supabase
+    // 1. RECUPERO INFO ASSOCIAZIONE
+    // Troviamo il customer_id legato alla tessera prima di cancellare il record o modificarlo
+    const { data: tagData, error: tagFetchError } = await supabase
       .from('nfc_tags')
-      .insert({
-        uid: uid.trim(),
-        customer_id: customerData.id,
-        status: 'active',
-        token: secureToken // 👈 SALVA IL TOKEN USA E GETTA NEL DB!
-      });
+      .select('customer_id')
+      .eq('uid', uid.trim())
+      .maybeSingle();
 
-    if (tagError) {
-      // 🛡️ ANNULLAMENTO (Rollback): Se la tessera fallisce (es. UID già esistente), cancella il cliente appena creato per non lasciare dati orfani
-      await supabase.from('customers').delete().eq('id', customerData.id);
-      
-      if (tagError.code === '23505') {
-        return NextResponse.json({ success: false, error: 'Questa tessera (UID) è già associata a un altro cliente.' }, { status: 400 });
+    if (tagFetchError) {
+      return NextResponse.json({ success: false, error: `Errore lettura tessera: ${tagFetchError.message}` }, { status: 500 });
+    }
+
+    if (!tagData) {
+      return NextResponse.json({ success: false, error: 'Tessera non trovata nel database' }, { status: 404 });
+    }
+
+    // 2. RESET E DISASSOCIAZIONE DELLA TESSERA FISICA
+    // Impostiamo il token a null (il vecchio QR muore qui), azzeriamo il cliente e cambiamo lo stato
+    const { error: tagUpdateError } = await supabase
+      .from('nfc_tags')
+      .update({
+        customer_id: null,
+        token: null,       // 👈 Il vecchio QR stampato smette istantaneamente di funzionare!
+        status: 'inactive' // Torna disponibile per essere riassociata a un nuovo ospite
+      })
+      .eq('uid', uid.trim());
+
+    if (tagUpdateError) {
+      return NextResponse.json({ success: false, error: `Errore disassociazione hardware: ${tagUpdateError.message}` }, { status: 500 });
+    }
+
+    // 3. ELIMINAZIONE CLIENTE / SVUOTAMENTO ANAGRAFICA
+    // Se la tessera era legata a un cliente valido, puliamo la tabella customers
+    if (tagData.customer_id) {
+      const { error: customerDeleteError } = await supabase
+        .from('customers')
+        .delete()
+        .eq('id', tagData.customer_id);
+
+      if (customerDeleteError) {
+        // 💡 NOTA DI BACKEND: Se hai una tabella 'transactions' legata a 'customers' tramite Foreign Key,
+        // questa eliminazione fallirà a meno che tu non abbia impostato il vincolo su "ON DELETE CASCADE".
+        // Registriamo l'errore in console ma non blocchiamo la risposta, poiché la tessera è già stata liberata.
+        console.error("Nota: Impossibile eliminare l'anagrafica cliente, probabilmente ha transazioni collegate storiche:", customerDeleteError.message);
       }
-      return NextResponse.json({ success: false, error: `Errore associazione tag: ${tagError.message}` }, { status: 500 });
     }
 
     // 4. RISPOSTA DI SUCCESSO
     return NextResponse.json({
       success: true,
-      message: 'Cliente e Tessera registrati correttamente sul database!',
-      token: secureToken, // 👈 RESTITUISCE IL TOKEN AL FRONTEND PER IL QR CODE!
-      customer: {
-        id: customerData.id,
-        name: customerData.name,
-        balance: parseFloat(customerData.balance || 0)
-      }
+      message: `Tessera ${uid} liberata con successo. Rimborso registrato via ${method || 'CONTANTI'}.`
     });
 
   } catch (err) {
