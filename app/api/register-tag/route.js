@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// 🛑 Forza Vercel a eseguire il codice sul DB ogni volta, senza usare la cache
 export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
@@ -14,81 +13,46 @@ export async function POST(request) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    
-    // Legge i dati inviati dalla cassa
     const body = await request.json().catch(() => ({}));
-    const { uid, name, balance } = body; 
-    const initialBalance = parseFloat(balance) || 0;
+    const { uid, name, balance } = body;
 
-    // Controlli di sicurezza minimi
     if (!uid || !name) {
       return NextResponse.json({ success: false, error: 'UID e Nome sono obbligatori' }, { status: 400 });
     }
 
-    // 1. CREAZIONE CLIENTE
+    // 1. Creazione record cliente
     const { data: customerData, error: customerError } = await supabase
       .from('customers')
       .insert({ 
         name: name.trim(),
-        balance: initialBalance,
-        is_active: true // Forza il cliente come attivo
+        balance: parseFloat(balance) || 0,
+        is_active: true
       })
       .select()
       .single();
 
     if (customerError) {
-      return NextResponse.json({ success: false, error: `Errore creazione cliente: ${customerError.message}` }, { status: 500 });
+      return NextResponse.json({ success: false, error: `Errore database: ${customerError.message}` }, { status: 500 });
     }
 
-    // 2. TRACCIAMENTO FINANZIARIO (Se c'è un saldo iniziale, registra la ricarica)
-    // Questo popola la tabella transactions rispettando il vincolo CHECK (amount > 0)
-    if (initialBalance > 0) {
-      const { error: txError } = await supabase
-        .from('transactions')
-        .insert({
-          customer_id: customerData.id,
-          type: 'topup', // 👈 Rispetta il check constraint ['topup', 'purchase', 'refund', 'adjustment']
-          amount: initialBalance,
-          description: 'Ricarica iniziale all\'attivazione della tessera'
-        });
-
-      if (txError) {
-        // Rollback di sicurezza: se la transazione fallisce, cancella il cliente appena creato
-        await supabase.from('customers').delete().eq('id', customerData.id);
-        return NextResponse.json({ success: false, error: `Errore registrazione ricarica iniziale: ${txError.message}` }, { status: 500 });
-      }
-    }
-
-    // 3. GENERAZIONE TOKEN SICURO PER QR CODE
-    const secureToken = crypto.randomUUID();
-
-    // 4. ASSOCIAZIONE TESSERA (Usa UPSERT per permettere il riciclo dell'hardware)
+    // 2. Associazione diretta della tessera hardware
     const { error: tagError } = await supabase
       .from('nfc_tags')
       .upsert({
         uid: uid.trim(),
-        customer_id: customerData.id, // Collega la tessera fisica al NUOVO cliente
-        status: 'active',
-        token: secureToken
-      }, { onConflict: 'uid' }); // 👈 Se l'UID esiste già, sovrascrive i dati (riciclo chip)
+        customer_id: customerData.id,
+        status: 'active'
+      }, { onConflict: 'uid' });
 
     if (tagError) {
-      // Rollback totale: se l'hardware fallisce, pulisci il cliente (le transazioni collegate si cancellano se hai il CASCADE, 
-      // altrimenti eliminiamo manualmente anche la transazione se necessario. Per sicurezza eliminiamo il cliente).
+      // Rollback se l'inserimento della tessera fallisce
       await supabase.from('customers').delete().eq('id', customerData.id);
-      return NextResponse.json({ success: false, error: `Errore associazione tag hardware: ${tagError.message}` }, { status: 500 });
+      return NextResponse.json({ success: false, error: `Errore associazione tag: ${tagError.message}` }, { status: 500 });
     }
 
-    // 5. RISPOSTA DI SUCCESSO
     return NextResponse.json({
       success: true,
-      message: 'Cliente, Tessera e Ricarica registrati correttamente!',
-      token: secureToken, // 👈 Passalo al frontend per generare il QR Code stampabile
-      customer: {
-        id: customerData.id,
-        name: customerData.name,
-        balance: initialBalance
-      }
+      customer: customerData
     });
 
   } catch (err) {
