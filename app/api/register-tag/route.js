@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// 🛑 FONDAMENTALE: Forza Vercel a eseguire il codice sul DB ogni volta, senza usare la cache
+// 🛑 Forza Vercel a eseguire il codice sul DB ogni volta, senza usare la cache
 export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
@@ -17,10 +17,10 @@ export async function POST(request) {
     
     // Legge i dati inviati dalla cassa
     const body = await request.json().catch(() => ({}));
-    const { uid, name, balance } = body;
+    const { uid, name, balance } = body; 
     const initialBalance = parseFloat(balance) || 0;
 
-    // Controlli preliminari sui dati obbligatori
+    // Controlli di sicurezza minimi
     if (!uid || !name) {
       return NextResponse.json({ success: false, error: 'UID e Nome sono obbligatori' }, { status: 400 });
     }
@@ -30,7 +30,8 @@ export async function POST(request) {
       .from('customers')
       .insert({ 
         name: name.trim(),
-        balance: initialBalance // SALVA IL SALDO INIZIALE NEL DB!
+        balance: initialBalance,
+        is_active: true // Forza il cliente come attivo
       })
       .select()
       .single();
@@ -39,39 +40,54 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: `Errore creazione cliente: ${customerError.message}` }, { status: 500 });
     }
 
-    // 2. GENERAZIONE TOKEN SECURE "USA E GETTA"
-    // crypto.randomUUID() genera una stringa casuale unica del tipo: "123e4567-e89b-12d3-a456-426614174000"
-    const secureToken = crypto.randomUUID();
+    // 2. TRACCIAMENTO FINANZIARIO (Se c'è un saldo iniziale, registra la ricarica)
+    // Questo popola la tabella transactions rispettando il vincolo CHECK (amount > 0)
+    if (initialBalance > 0) {
+      const { error: txError } = await supabase
+        .from('transactions')
+        .insert({
+          customer_id: customerData.id,
+          type: 'topup', // 👈 Rispetta il check constraint ['topup', 'purchase', 'refund', 'adjustment']
+          amount: initialBalance,
+          description: 'Ricarica iniziale all\'attivazione della tessera'
+        });
 
-    // 3. ASSOCIAZIONE TESSERA (Usa l'ID del cliente e salva il token)
-    const { error: tagError } = await supabase
-      .from('nfc_tags')
-      .insert({
-        uid: uid.trim(),
-        customer_id: customerData.id,
-        status: 'active',
-        token: secureToken // 👈 SALVA IL TOKEN USA E GETTA NEL DB!
-      });
-
-    if (tagError) {
-      // 🛡️ ANNULLAMENTO (Rollback): Se la tessera fallisce (es. UID già esistente), cancella il cliente appena creato per non lasciare dati orfani
-      await supabase.from('customers').delete().eq('id', customerData.id);
-      
-      if (tagError.code === '23505') {
-        return NextResponse.json({ success: false, error: 'Questa tessera (UID) è già associata a un altro cliente.' }, { status: 400 });
+      if (txError) {
+        // Rollback di sicurezza: se la transazione fallisce, cancella il cliente appena creato
+        await supabase.from('customers').delete().eq('id', customerData.id);
+        return NextResponse.json({ success: false, error: `Errore registrazione ricarica iniziale: ${txError.message}` }, { status: 500 });
       }
-      return NextResponse.json({ success: false, error: `Errore associazione tag: ${tagError.message}` }, { status: 500 });
     }
 
-    // 4. RISPOSTA DI SUCCESSO
+    // 3. GENERAZIONE TOKEN SICURO PER QR CODE
+    const secureToken = crypto.randomUUID();
+
+    // 4. ASSOCIAZIONE TESSERA (Usa UPSERT per permettere il riciclo dell'hardware)
+    const { error: tagError } = await supabase
+      .from('nfc_tags')
+      .upsert({
+        uid: uid.trim(),
+        customer_id: customerData.id, // Collega la tessera fisica al NUOVO cliente
+        status: 'active',
+        token: secureToken
+      }, { onConflict: 'uid' }); // 👈 Se l'UID esiste già, sovrascrive i dati (riciclo chip)
+
+    if (tagError) {
+      // Rollback totale: se l'hardware fallisce, pulisci il cliente (le transazioni collegate si cancellano se hai il CASCADE, 
+      // altrimenti eliminiamo manualmente anche la transazione se necessario. Per sicurezza eliminiamo il cliente).
+      await supabase.from('customers').delete().eq('id', customerData.id);
+      return NextResponse.json({ success: false, error: `Errore associazione tag hardware: ${tagError.message}` }, { status: 500 });
+    }
+
+    // 5. RISPOSTA DI SUCCESSO
     return NextResponse.json({
       success: true,
-      message: 'Cliente e Tessera registrati correttamente sul database!',
-      token: secureToken, // 👈 RESTITUISCE IL TOKEN AL FRONTEND PER IL QR CODE!
+      message: 'Cliente, Tessera e Ricarica registrati correttamente!',
+      token: secureToken, // 👈 Passalo al frontend per generare il QR Code stampabile
       customer: {
         id: customerData.id,
         name: customerData.name,
-        balance: parseFloat(customerData.balance || 0)
+        balance: initialBalance
       }
     });
 
