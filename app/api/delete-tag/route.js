@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    // Usa la SERVICE_ROLE_KEY per garantire i permessi di scrittura sul database
+    // Usa la SERVICE_ROLE_KEY per avere i permessi completi di scrittura
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
@@ -23,11 +23,11 @@ export async function POST(request) {
 
     const cleanUid = uid.trim();
 
-    // 1. Recupero del cliente attualmente associato alla tessera
+    // 1. Cerca la tessera gestendo maiuscole/minuscole (.ilike)
     const { data: tagData, error: tagFetchError } = await supabase
       .from('nfc_tags')
       .select('customer_id')
-      .eq('uid', cleanUid)
+      .ilike('uid', cleanUid)
       .maybeSingle();
 
     if (tagFetchError) {
@@ -38,20 +38,20 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'Tessera non trovata nel database' }, { status: 404 });
     }
 
-    // 2. SGANCIO REALE: Imposta customer_id a NULL per liberare la tessera
+    // 2. DISASSOCIAZIONE FISICA: customer_id = null e status = 'inactive'
     const { error: tagUpdateError } = await supabase
       .from('nfc_tags')
       .update({ 
-        customer_id: null, // <--- Libera la scheda rendendola riutilizzabile
+        customer_id: null, // Ora il database lo accetta!
         status: 'inactive' 
       })
-      .eq('uid', cleanUid);
+      .ilike('uid', cleanUid);
 
     if (tagUpdateError) {
       return NextResponse.json({ success: false, error: `Errore disassociazione tag: ${tagUpdateError.message}` }, { status: 500 });
     }
 
-    // 3. Disattivazione dell'anagrafica cliente e azzeramento saldo
+    // 3. Disattiva il vecchio cliente e azzera il saldo
     if (tagData.customer_id) {
       const { error: customerUpdateError } = await supabase
         .from('customers')
@@ -66,7 +66,7 @@ export async function POST(request) {
       }
     }
 
-    return NextResponse.json({ success: true, message: 'Tessera liberata con successo e cliente disattivato.' });
+    return NextResponse.json({ success: true, message: 'Tessera liberata con successo ed pronta per la riassociazione!' });
 
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
