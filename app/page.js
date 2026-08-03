@@ -11,13 +11,13 @@ export default function CassaLido() {
   const [tab, setTab] = useState('reg');
   const [toast, setToast] = useState({ show: false, message: '', isSuccess: true });
   
-  // Timer di riferimento per ripulire i toast precedenti
   const toastTimeoutRef = useRef(null);
 
-  // Stati di controllo tessere esistenti
+  // Stati di controllo tessere
   const [scannedCard, setScannedCard] = useState(null); 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [depositReturned, setDepositReturned] = useState(false);
+  const [loadingTag, setLoadingTag] = useState(false);
 
   // Form Stati
   const [regUid, setRegUid] = useState('');
@@ -36,7 +36,7 @@ export default function CassaLido() {
   const topupInputRef = useRef(null);
   const payInputRef = useRef(null);
 
-  // 🛡️ CONTROLLO AUTENTICAZIONE E RUOLO
+  // 🛡️ AUTENTICAZIONE
   useEffect(() => {
     const savedRole = localStorage.getItem('user_role');
     const savedName = localStorage.getItem('user_name');
@@ -44,23 +44,23 @@ export default function CassaLido() {
     if (!savedRole) {
       router.push('/login'); 
     } else {
-      setRole(savedRole);
-      setUsername(savedName || savedRole);
+      const normalizedRole = savedRole.toLowerCase();
+      setRole(normalizedRole);
+      setUsername(savedName || normalizedRole);
       
-      if (savedRole === 'bar') {
+      if (normalizedRole === 'bar') {
         setTab('pay'); 
       } else {
         setTab('reg');
       }
     }
 
-    // Cleanup del timer del toast se il componente si smonta
     return () => {
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     };
   }, [router]);
 
-  // Gestione focus dei tab e reset stati temporanei
+  // Gestione reset al cambio TAB
   useEffect(() => {
     setScannedCard(null);
     setTopupSuccessData(null);
@@ -80,18 +80,15 @@ export default function CassaLido() {
     router.push('/login');
   };
 
-  // Fix: Evitata la mutazione diretta ed aggiunto il reset del timeout precedente
   const showToast = (message, isSuccess = true) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    
     setToast({ show: true, message, isSuccess });
-    
     toastTimeoutRef.current = setTimeout(() => {
       setToast({ show: false, message: '', isSuccess: true });
     }, 4500);
   };
 
-  // 📱 GESTORE TASTIERINO VIRTUALE CENTRALIZZATO
+  // 📱 TASTIERINO VIRTUALE
   const handleVirtualKeypad = (key, currentStr, setStr) => {
     let cleanStr = currentStr === '0.00' || currentStr === '0' ? '' : currentStr;
     
@@ -111,41 +108,43 @@ export default function CassaLido() {
     setStr(cleanStr + key);
   };
 
-  // 🔄 FUNZIONE CENTRALIZZATA DI LETTURA TAG
+  // 🔄 LETTURA TAG CENTRALIZZATA
   const fetchTagData = async (uidTarget) => {
+    if (!uidTarget) return null;
+    setLoadingTag(true);
     try {
       const res = await fetch('/api/get-tag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: uidTarget })
+        body: JSON.stringify({ uid: uidTarget.trim() })
       });
       const data = await res.json();
+      setLoadingTag(false);
 
-      if (data.success && data.exists) {
+      if (res.ok && data.success && data.exists) {
         return {
-          uid: uidTarget,
+          uid: uidTarget.trim(),
           name: data.customer?.name || 'Ospite Sconosciuto',
           balance: data.customer?.balance || 0,
           id: data.customer?.id, 
           exists: true
         };
       }
-      return { exists: false };
+      return { exists: false, error: data.error };
     } catch (err) {
+      setLoadingTag(false);
+      showToast("Errore di connessione al server", false);
       return null;
     }
   };
 
-  // 🔍 VERIFICA UID (Tab Registrazione)
-  const handleUidKeyDown = async (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const uidTarget = regUid.trim();
-      if (!uidTarget) return;
+  // LISTENERS TASTO ENTER & RICERCA
+  const handleUidSearch = async (uidTarget, targetTab) => {
+    if (!uidTarget.trim()) return;
+    const cardInfo = await fetchTagData(uidTarget);
+    if (!cardInfo) return;
 
-      const cardInfo = await fetchTagData(uidTarget);
-      if (!cardInfo) return;
-
+    if (targetTab === 'reg') {
       if (cardInfo.exists) {
         setScannedCard(cardInfo);
         showToast("Tessera già occupata!", false);
@@ -153,40 +152,7 @@ export default function CassaLido() {
         setScannedCard(null);
         nameInputRef.current?.focus(); 
       }
-    }
-  };
-
-  // 🔍 LETTURA SALDO (Tab Ricarica)
-  const handleTopupUidKeyDown = async (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const uidTarget = topupUid.trim();
-      if (!uidTarget) return;
-
-      setTopupSuccessData(null);
-      const cardInfo = await fetchTagData(uidTarget);
-      if (!cardInfo) return;
-
-      if (cardInfo.exists) {
-        setScannedCard(cardInfo);
-      } else {
-        setScannedCard(null);
-        showToast("Tessera inesistente!", false);
-      }
-    }
-  };
-
-  // 🔍 LETTURA SALDO (Tab Pagamento)
-  const handlePayUidKeyDown = async (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const uidTarget = payUid.trim();
-      if (!uidTarget) return;
-
-      setPaySuccessData(null);
-      const cardInfo = await fetchTagData(uidTarget);
-      if (!cardInfo) return;
-
+    } else {
       if (cardInfo.exists) {
         setScannedCard(cardInfo);
       } else {
@@ -196,7 +162,7 @@ export default function CassaLido() {
     }
   };
 
-  // 🚀 ATTIVAZIONE REALE TESSERA
+  // 🚀 ATTIVAZIONE NUOVA TESSERA
   const handleRegister = async (e) => {
     if (e) e.preventDefault();
     if (scannedCard) return;
@@ -220,22 +186,27 @@ export default function CassaLido() {
 
       if (res.ok && data.success) {
         showToast("Tessera attivata con successo!");
-
         setRegUid(''); setRegName(''); setRegBalance('0.00');
         regInputRef.current?.focus();
       } else {
-        showToast(data.error || "Errore salvataggio", false);
+        showToast(data.error || "Errore salvataggio registrazione", false);
       }
     } catch (err) {
       showToast("Errore di connessione server", false);
     }
   };
 
+  // 🗑️ DISASSOCIAZIONE / ELIMINAZIONE
   const confirmDisassociation = async (method) => {
     if (role === 'operatore') {
-      showToast("AZIONE NON CONSENTITA", false);
+      showToast("AZIONE NON CONSENTITA PER L'OPERATORE", false);
       return;
     }
+    if (!scannedCard?.uid) {
+      showToast("Nessuna tessera selezionata!", false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/delete-tag', {
         method: 'POST',
@@ -243,47 +214,101 @@ export default function CassaLido() {
         body: JSON.stringify({ uid: scannedCard.uid, method: method })
       });
       const data = await res.json();
+
       if (res.ok && data.success) {
-        showToast("Tessera disassociata!");
-        setScannedCard(null); setShowDeleteModal(false); setDepositReturned(false);
-        setRegUid(''); regInputRef.current?.focus();
+        showToast("Tessera disassociata con successo!");
+        setScannedCard(null); 
+        setShowDeleteModal(false); 
+        setDepositReturned(false);
+        setRegUid(''); 
+        regInputRef.current?.focus();
+      } else {
+        showToast(data.error || "Errore durante la disassociazione", false);
       }
-    } catch (err) { showToast("Errore eliminazione", false); }
+    } catch (err) { 
+      showToast("Errore di rete durante l'eliminazione", false); 
+    }
   };
 
+  // 💰 RICARICA
   const handleTopup = async (e) => {
-    if (e) e.preventDefault(); if (!scannedCard) return;
+    if (e) e.preventDefault(); 
+    if (!scannedCard) {
+      showToast("Nessuna tessera associata trovata", false);
+      return;
+    }
+
+    const amountNum = parseFloat(topupAmount) || 0;
+    if (amountNum <= 0) {
+      showToast("Inserisci un importo valido", false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/topup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: topupUid.trim(), amount: parseFloat(topupAmount) || 0 })
+        body: JSON.stringify({ uid: topupUid.trim() || scannedCard.uid, amount: amountNum })
       });
       const data = await res.json();
+
       if (res.ok && data.success) {
-        setTopupSuccessData({ name: scannedCard.name, oldBalance: parseFloat(scannedCard.balance), added: parseFloat(topupAmount) || 0, newBalance: parseFloat(data.new_balance) });
-        showToast(`Ricarica eseguita!`); setTopupUid(''); setTopupAmount(''); setScannedCard(null); topupInputRef.current?.focus();
+        setTopupSuccessData({ 
+          name: scannedCard.name, 
+          oldBalance: parseFloat(scannedCard.balance), 
+          added: amountNum, 
+          newBalance: parseFloat(data.new_balance) 
+        });
+        showToast(`Ricarica eseguita!`); 
+        setTopupUid(''); setTopupAmount(''); setScannedCard(null); 
+        topupInputRef.current?.focus();
+      } else {
+        showToast(data.error || "Errore durante la ricarica", false);
       }
-    } catch (err) { showToast("Errore ricarica", false); }
+    } catch (err) { 
+      showToast("Errore di connessione al server", false); 
+    }
   };
 
+  // 🛒 PAGAMENTO
   const handlePayment = async (e) => {
-    if (e) e.preventDefault(); if (!scannedCard) return;
+    if (e) e.preventDefault(); 
+    if (!scannedCard) {
+      showToast("Nessuna tessera letta!", false);
+      return;
+    }
+
     const currentBalance = parseFloat(scannedCard.balance);
     const chargeAmount = parseFloat(payAmount) || 0;
-    if (chargeAmount > currentBalance) { showToast("Credito Insufficiente!", false); return; }
+    if (chargeAmount > currentBalance) { 
+      showToast("Credito Insufficiente!", false); 
+      return; 
+    }
+
     try {
       const res = await fetch('/api/pay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: payUid.trim(), amount: chargeAmount, description: payDescription })
+        body: JSON.stringify({ uid: payUid.trim() || scannedCard.uid, amount: chargeAmount, description: payDescription })
       });
       const data = await res.json();
+
       if (res.ok && data.success) {
-        setPaySuccessData({ name: scannedCard.name, oldBalance: currentBalance, charged: chargeAmount, newBalance: parseFloat(data.new_balance) });
-        showToast(`Pagamento addebitato!`); setPayUid(''); setPayAmount(''); setScannedCard(null); payInputRef.current?.focus();
+        setPaySuccessData({ 
+          name: scannedCard.name, 
+          oldBalance: currentBalance, 
+          charged: chargeAmount, 
+          newBalance: parseFloat(data.new_balance) 
+        });
+        showToast(`Pagamento addebitato!`); 
+        setPayUid(''); setPayAmount(''); setScannedCard(null); 
+        payInputRef.current?.focus();
+      } else {
+        showToast(data.error || "Errore addebito pagamento", false);
       }
-    } catch (err) { showToast("Errore di invio pagamento", false); }
+    } catch (err) { 
+      showToast("Errore di invio pagamento", false); 
+    }
   };
 
   if (!role) {
@@ -294,7 +319,7 @@ export default function CassaLido() {
     <div className="bg-slate-50 font-sans min-h-screen text-slate-800 antialiased relative pb-12">
       <nav className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 text-white p-4 shadow-lg">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
-          <h1 className="text-lg font-black tracking-wider uppercase">Lido Cassa Cashless <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full lowercase">v4.0-pos</span></h1>
+          <h1 className="text-lg font-black tracking-wider uppercase">Lido Cassa Cashless <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full lowercase">v4.1-pos</span></h1>
           <div className="flex items-center space-x-4">
             <span className="text-xs font-bold bg-black/20 px-3 py-1.5 rounded-xl border border-white/10">👤 {username.toUpperCase()} (<span className="text-amber-300 font-black">{role}</span>)</span>
             <button onClick={handleLogout} className="text-xs font-black bg-rose-600/80 hover:bg-rose-600 px-3 py-1.5 rounded-xl transition-all uppercase tracking-wider">Esci</button>
@@ -320,31 +345,43 @@ export default function CassaLido() {
           {tab === 'reg' && (role === 'gestore' || role === 'operatore') && (
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-5">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">1. UID Carta (Passa sul lettore)</label>
-                <input ref={regInputRef} type="text" maxLength={10} value={regUid} inputMode="none" onChange={(e) => setRegUid(e.target.value)} onKeyDown={handleUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-blue-500"/>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">1. UID Carta (Passa sul lettore o digita)</label>
+                <div className="flex gap-2">
+                  <input 
+                    ref={regInputRef} 
+                    type="text" 
+                    maxLength={15} 
+                    value={regUid} 
+                    onChange={(e) => setRegUid(e.target.value)} 
+                    onKeyDown={(e) => e.key === 'Enter' && handleUidSearch(regUid, 'reg')} 
+                    placeholder="In attesa della lettura..." 
+                    className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-blue-500"
+                  />
+                  <button type="button" onClick={() => handleUidSearch(regUid, 'reg')} className="bg-blue-600 text-white font-bold px-4 rounded-xl text-xs uppercase">Cerca</button>
+                </div>
               </div>
 
               {scannedCard ? (
                 <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 text-center space-y-3">
                   <span className="text-3xl">🛑</span>
                   <h3 className="text-sm font-black text-rose-900 uppercase">Tessera Già Occupata!</h3>
-                  <p className="text-xs text-rose-700">Legata a: <b>{scannedCard.name}</b> Saldo: <b>€{parseFloat(scannedCard.balance).toFixed(2)}</b>.</p>
+                  <p className="text-xs text-rose-700">Legata a: <b>{scannedCard.name}</b> - Saldo: <b>€{parseFloat(scannedCard.balance).toFixed(2)}</b>.</p>
                   {role === 'gestore' ? (
                     <button type="button" onClick={() => setShowDeleteModal(true)} className="w-full bg-rose-600 text-white font-bold p-3 rounded-xl text-xs uppercase tracking-wider shadow-md hover:bg-rose-700 transition-colors">🗑️ Disassocia ed Elimina Cliente</button>
                   ) : (
-                    <div className="bg-amber-100 text-amber-950 text-[11px] font-bold p-2.5 rounded-lg border border-amber-200">Solo l'amministratore/gestore può svuotare e liberare le tessere.</div>
+                    <div className="bg-amber-100 text-amber-950 text-[11px] font-bold p-2.5 rounded-lg border border-amber-200">Solo l'amministratore/gestore può liberare le tessere.</div>
                   )}
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">2. Nome Ospite / Ombrellone (Testo Libero)</label>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">2. Nome Ospite / Ombrellone</label>
                       <input ref={nameInputRef} type="text" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="Es. Mario Rossi / Ombrellone 15" className="w-full p-3.5 bg-white border-2 border-slate-200 rounded-xl outline-none focus:border-blue-500 font-bold"/>
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">3. Carico Denaro Iniziale (€)</label>
-                      <input type="text" value={regBalance} inputMode="none" readOnly className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl font-black text-blue-600 text-xl text-center outline-none"/>
+                      <input type="text" value={regBalance} readOnly className="w-full p-3 bg-white border-2 border-slate-200 rounded-xl font-black text-blue-600 text-xl text-center outline-none"/>
                     </div>
                   </div>
 
@@ -364,8 +401,22 @@ export default function CassaLido() {
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-5">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">UID Carta (Passa sul lettore)</label>
-                <input ref={topupInputRef} type="text" maxLength={10} value={topupUid} inputMode="none" onChange={(e) => setTopupUid(e.target.value)} onKeyDown={handleTopupUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-emerald-500"/>
+                <div className="flex gap-2">
+                  <input 
+                    ref={topupInputRef} 
+                    type="text" 
+                    maxLength={15} 
+                    value={topupUid} 
+                    onChange={(e) => setTopupUid(e.target.value)} 
+                    onKeyDown={(e) => e.key === 'Enter' && handleUidSearch(topupUid, 'topup')} 
+                    placeholder="In attesa della lettura..." 
+                    className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-emerald-500"
+                  />
+                  <button type="button" onClick={() => handleUidSearch(topupUid, 'topup')} className="bg-emerald-600 text-white font-bold px-4 rounded-xl text-xs uppercase">Verifica</button>
+                </div>
               </div>
+
+              {loadingTag && <div className="text-center text-xs font-bold text-slate-400">Verifica tessera in corso...</div>}
 
               {scannedCard && (
                 <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 flex justify-between items-center">
@@ -383,7 +434,7 @@ export default function CassaLido() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Importo Cash da Aggiungere (€)</label>
-                  <input type="text" value={topupAmount} inputMode="none" readOnly placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-emerald-600 text-2xl text-center outline-none"/>
+                  <input type="text" value={topupAmount} readOnly placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-emerald-600 text-2xl text-center outline-none"/>
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {['10', '20', '50', '100'].map(val => (
@@ -415,8 +466,20 @@ export default function CassaLido() {
           {tab === 'pay' && (role === 'gestore' || role === 'bar') && (
             <section className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">UID Carta da Addebitare (Passa sul lettore)</label>
-                <input ref={payInputRef} type="text" maxLength={10} value={payUid} inputMode="none" onChange={(e) => setPayUid(e.target.value)} onKeyDown={handlePayUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-purple-500"/>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">UID Carta da Addebitare</label>
+                <div className="flex gap-2">
+                  <input 
+                    ref={payInputRef} 
+                    type="text" 
+                    maxLength={15} 
+                    value={payUid} 
+                    onChange={(e) => setPayUid(e.target.value)} 
+                    onKeyDown={(e) => e.key === 'Enter' && handleUidSearch(payUid, 'pay')} 
+                    placeholder="In attesa della lettura..." 
+                    className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-purple-500"
+                  />
+                  <button type="button" onClick={() => handleUidSearch(payUid, 'pay')} className="bg-purple-600 text-white font-bold px-4 rounded-xl text-xs uppercase">Verifica</button>
+                </div>
               </div>
 
               {scannedCard && (
@@ -429,7 +492,7 @@ export default function CassaLido() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Costo Consumazione (€)</label>
-                  <input type="text" value={payAmount} inputMode="none" readOnly placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-purple-600 text-2xl text-center outline-none"/>
+                  <input type="text" value={payAmount} readOnly placeholder="0.00" className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-black text-purple-600 text-2xl text-center outline-none"/>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Causale Spesa</label>
@@ -465,7 +528,7 @@ export default function CassaLido() {
 
       {/* WINDOW MODALE CHIUSURA TESSERA */}
       {showDeleteModal && role === 'gestore' && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-5 text-white relative z-50">
             <div className="text-center space-y-1">
               <span className="text-4xl">⚠️</span>
@@ -510,7 +573,7 @@ export default function CassaLido() {
         </div>
       )}
 
-      {/* 🔥 FIX: COMPONENTE TOAST INIETTATO E COMPILATO NEL DOM */}
+      {/* TOAST COMPONENT */}
       {toast.show && (
         <div className={`fixed bottom-5 right-5 z-50 flex items-center p-4 rounded-2xl shadow-2xl border text-xs font-black uppercase tracking-wider transition-all duration-300 transform translate-y-0 ${
           toast.isSuccess 
