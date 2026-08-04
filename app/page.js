@@ -3,6 +3,45 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
+// 🖨️ FUNZIONE DI STAMPA RAWBT (ESC/POS)
+function printCardLabel(cardUid) {
+  if (!cardUid) return;
+
+  const ESC = '\u001B';
+  const GS = '\u001D';
+
+  let escpos = '';
+
+  // 1. Inizializza stampante
+  escpos += ESC + '@';
+
+  // 2. Allineamento centrato
+  escpos += ESC + 'a' + '\u0001';
+
+  // 3. Intestazione: Grassetto + Testo Ingrandito
+  escpos += ESC + 'E' + '\u0001';
+  escpos += GS + '!' + '\u0011';
+  escpos += 'LIDO SANTA SEVERA\n\n';
+
+  // 4. Ripristina dimensione normale per la dicitura
+  escpos += GS + '!' + '\u0000';
+  escpos += 'N. CARTA / UID:\n';
+
+  // 5. Numero Carta: Ingrandito solo in altezza
+  escpos += GS + '!' + '\u0001';
+  escpos += cardUid.toUpperCase() + '\n\n';
+
+  // 6. Grassetto OFF e Avanzamento carta
+  escpos += ESC + 'E' + '\u0000';
+  escpos += ESC + 'd' + '\u0003';
+
+  // Converti in Base64 per l'Intent Android RawBT
+  const base64Data = btoa(unescape(encodeURIComponent(escpos)));
+  const rawbtIntent = `intent:${base64Data}#Intent;scheme=rawbt;package=ru.a4144.rawbtprinter;S.type=base64;end;`;
+
+  window.location.href = rawbtIntent;
+}
+
 export default function CassaLido() {
   const router = useRouter();
   const [role, setRole] = useState(null);
@@ -11,7 +50,6 @@ export default function CassaLido() {
   const [tab, setTab] = useState('reg');
   const [toast, setToast] = useState({ show: false, message: '', isSuccess: true });
   
-  // Timer di riferimento per ripulire i toast precedenti
   const toastTimeoutRef = useRef(null);
 
   // Stati di controllo tessere esistenti
@@ -54,7 +92,6 @@ export default function CassaLido() {
       }
     }
 
-    // Cleanup del timer del toast se il componente si smonta
     return () => {
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     };
@@ -80,7 +117,6 @@ export default function CassaLido() {
     router.push('/login');
   };
 
-  // Fix: Evitata la mutazione diretta ed aggiunto il reset del timeout precedente
   const showToast = (message, isSuccess = true) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     
@@ -367,16 +403,28 @@ export default function CassaLido() {
                 <input ref={topupInputRef} type="text" maxLength={10} value={topupUid} inputMode="none" onChange={(e) => setTopupUid(e.target.value)} onKeyDown={handleTopupUidKeyDown} placeholder="In attesa della lettura..." className="w-full p-3.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono font-bold text-center tracking-widest outline-none focus:border-emerald-500"/>
               </div>
 
+              {/* BOX DATI CARTA LETTA + PULSANTE DI STAMPA ETICHETTA */}
               {scannedCard && (
-                <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 flex justify-between items-center">
-                  <div>
-                    <span className="text-xs text-slate-400 font-bold uppercase block">Intestatario</span>
-                    <span className="font-black text-slate-800 text-base">{scannedCard.name}</span>
+                <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-xs text-slate-400 font-bold uppercase block">Intestatario</span>
+                      <span className="font-black text-slate-800 text-base">{scannedCard.name}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-slate-400 font-bold uppercase block">Saldo Corrente</span>
+                      <span className="font-black text-amber-500 text-xl">€{parseFloat(scannedCard.balance).toFixed(2)}</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs text-slate-400 font-bold uppercase block">Saldo Corrente</span>
-                    <span className="font-black text-amber-500 text-xl">€{parseFloat(scannedCard.balance).toFixed(2)}</span>
-                  </div>
+
+                  {/* 🖨️ PULSANTE PER LA STAMPA SU NETUMSCAN / RAWBT */}
+                  <button
+                    type="button"
+                    onClick={() => printCardLabel(scannedCard.uid)}
+                    className="w-full bg-slate-800 hover:bg-slate-900 active:scale-[0.98] text-white font-bold py-3 px-4 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all"
+                  >
+                    🖨️ Stampa Etichetta Lido ({scannedCard.uid})
+                  </button>
                 </div>
               )}
 
@@ -510,7 +558,7 @@ export default function CassaLido() {
         </div>
       )}
 
-      {/* 🔥 FIX: COMPONENTE TOAST INIETTATO E COMPILATO NEL DOM */}
+      {/* COMPONENTE TOAST INIETTATO E COMPILATO NEL DOM */}
       {toast.show && (
         <div className={`fixed bottom-5 right-5 z-50 flex items-center p-4 rounded-2xl shadow-2xl border text-xs font-black uppercase tracking-wider transition-all duration-300 transform translate-y-0 ${
           toast.isSuccess 
@@ -523,4 +571,4 @@ export default function CassaLido() {
       )}
     </div>
   );
-}
+}}
