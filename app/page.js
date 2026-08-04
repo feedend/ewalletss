@@ -37,9 +37,9 @@ function printCardLabel(cardUid) {
 
   // Converti in Base64 per l'Intent Android RawBT
   const base64Data = btoa(unescape(encodeURIComponent(escpos)));
-  const rawbtIntent = `intent:${base64Data}#Intent;scheme=rawbt;package=ru.a4144.rawbtprinter;S.type=base64;end;`;
-
-  window.location.href = rawbtIntent;
+  
+  // 🟢 FIX: Schema URI diretto verso RawBT
+  window.location.href = `rawbt:base64,${base64Data}`;
 }
 
 export default function CassaLido() {
@@ -417,7 +417,7 @@ export default function CassaLido() {
                     </div>
                   </div>
 
-                  {/* 🖨️ PULSANTE PER LA STAMPA SU NETUMSCAN / RAWBT */}
+                  {/* 🖨️ PULSANTE PER LA STAMPA SU RAWBT */}
                   <button
                     type="button"
                     onClick={() => printCardLabel(scannedCard.uid)}
