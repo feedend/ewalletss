@@ -37,8 +37,5 @@ export function printCardLabel(cardUid) {
   // Converti i comandi in Base64 per inviarli a RawBT
   const base64Data = btoa(unescape(encodeURIComponent(escpos)));
 
-  // Lancia l'Intent Android verso l'app RawBT
-  const rawbtIntent = `intent:${base64Data}#Intent;scheme=rawbt;package=ru.a4144.rawbtprinter;S.type=base64;end;`;
-
-  window.location.href = rawbtIntent;
+window.location.href = `rawbt:base64,${base64Data}`;
 }
