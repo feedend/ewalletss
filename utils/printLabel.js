@@ -19,7 +19,7 @@ export function printCardLabel(cardUid) {
 
   // 3. Intestazione: Grassetto + Testo Ingrandito (Doppia altezza e larghezza)
   //escpos += ESC + 'E' + '\u0001';  Grassetto ON
-  escpos += GS + '!' + '\u0011';  // Ingrandisci testo
+  //escpos += GS + '!' + '\u0011';   Ingrandisci testo
   escpos += 'LIDO SANTA SEVERA\n\n';
 
   // 4. Ripristina dimensione normale per la dicitura
